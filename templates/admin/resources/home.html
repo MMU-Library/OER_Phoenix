@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - OER Platform{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row mb-4">
+        <div class="col-md-8 offset-md-2 text-center">
+            <h1 class="display-4 mb-3">Welcome to the OER Platform</h1>
+            <p class="lead">Your centralized hub for discovering, managing, and sharing Open Educational Resources</p>
+            <hr class="my-4">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-search"></i> AI-Powered Search</h5>
+                    <p class="card-text">Find relevant educational resources using our advanced AI search capabilities.</p>
+                    <a href="{% url 'resources:ai_search' %}" class="btn btn-primary">Start Searching</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-upload"></i> Batch Upload</h5>
+                    <p class="card-text">Upload multiple resources at once using our CSV upload feature.</p>
+                    <a href="{% url 'resources:csv_upload' %}" class="btn btn-primary">Upload Resources</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-compare"></i> Compare Resources</h5>
+                    <p class="card-text">Compare different resources side by side to find the best match.</p>
+                    <a href="{% url 'resources:compare_resources' %}" class="btn btn-primary">Compare</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6 offset-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-tools"></i> Administration</h5>
+                    <p class="card-text">Access admin tools to manage sources, configure harvesting, and monitor the platform.</p>
+                    <a href="{% url 'admin:index' %}" class="btn btn-secondary">Go to Admin</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-md-8 offset-md-2">
+            <div class="alert alert-info">
+                <h4 class="alert-heading">Getting Started</h4>
+                <p>Here's what you can do with the OER Platform:</p>
+                <ul>
+                    <li>Use AI-powered search to find relevant educational resources</li>
+                    <li>Upload and manage your own OER collections</li>
+                    <li>Compare different resources to find the best fit</li>
+                    <li>Export resources to Talis and other formats</li>
+                    <li>Set up automated harvesting from various OER sources</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+<style>
+    .card {
+        transition: transform 0.2s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .card:hover {
+        transform: translateY(-5px);
+    }
+    .bi {
+        font-size: 1.5rem;
+        margin-right: 0.5rem;
+    }
+</style>
+{% endblock %}

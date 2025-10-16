@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Talis Preview - OER Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <h1 class="mb-4">Talis Export Preview</h1>
+        
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ resource.title }}</h5>
+                <p class="card-text">{{ resource.description }}</p>
+                
+                <dl class="row">
+                    <dt class="col-sm-3">Source</dt>
+                    <dd class="col-sm-9">{{ resource.source }}</dd>
+                    
+                    <dt class="col-sm-3">License</dt>
+                    <dd class="col-sm-9">{{ resource.license }}</dd>
+                    
+                    <dt class="col-sm-3">URL</dt>
+                    <dd class="col-sm-9">
+                        <a href="{{ resource.url }}" target="_blank">{{ resource.url }}</a>
+                    </dd>
+                    
+                    <dt class="col-sm-3">Publisher</dt>
+                    <dd class="col-sm-9">{{ resource.publisher|default:"N/A" }}</dd>
+                </dl>
+                
+                <form method="post" action="{% url 'resources:export_to_talis' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="resource_id" value="{{ resource.id }}">
+                    <button type="submit" class="btn btn-success">
+                        Export to Talis
+                    </button>
+                    <a href="{% url 'resources:ai_search' %}" class="btn btn-secondary">
+                        Back to Search
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

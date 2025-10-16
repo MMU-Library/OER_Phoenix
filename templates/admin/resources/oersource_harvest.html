@@ -1,0 +1,44 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/custom.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>OER Source Harvest</h1>
+    <div class="module">
+        <form action="{% url 'harvest_oersource' oersource.id %}" method="post" enctype="multipart/form-data">{% csrf_token %}
+            <p>This form allows you to initiate the harvesting process for an OER source.</p>
+            <fieldset class="aligned wide">
+                <div class="form-row">
+                    {{ form.source_url.label_tag }}
+                    {{ form.source_url }}
+                    {% if form.source_url.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.source_url.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                <div class="form-row">
+                    {{ form.harvest_frequency.label_tag }}
+                    {{ form.harvest_frequency }}
+                    {% if form.harvest_frequency.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.harvest_frequency.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </fieldset>
+            <div class="submit-row">
+                <input type="submit" value="Initiate Harvest" class="default" name="_save">
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

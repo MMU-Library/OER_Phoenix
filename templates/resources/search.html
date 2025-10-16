@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Search - OER Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1 class="mb-4">AI-Powered Resource Search</h1>
+        
+        <form method="post" class="mb-4">
+            {% csrf_token %}
+            <div class="input-group input-group-lg">
+                <input type="text" name="query" class="form-control" 
+                       placeholder="Search for educational resources..." 
+                       value="{{ query }}" required>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </div>
+            <small class="text-muted">
+                Try: "introduction to calculus", "biology textbook", "programming for beginners"
+            </small>
+        </form>
+
+        {% if results %}
+            <h2 class="mb-3">Search Results ({{ results|length }})</h2>
+            <div class="row">
+                {% for resource, similarity in results %}
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title">{{ resource.title }}</h5>
+                                <span class="badge bg-success">{{ similarity }}% match</span>
+                            </div>
+                            <p class="card-text">{{ resource.description|truncatewords:30 }}</p>
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <strong>Source:</strong> {{ resource.source }}<br>
+                                    <strong>License:</strong> {{ resource.license }}
+                                </small>
+                            </div>
+                            <a href="{{ resource.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                View Resource
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% elif query %}
+            <div class="alert alert-info">
+                No resources found for "{{ query }}". Try a different search term.
+            </div>
+        {% endif %}
+
+        {% if batch_search and grouped_results %}
+            <h2 class="mb-3">Batch Search Results</h2>
+            {% for item in grouped_results %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5>Uploaded: {{ item.resource.title }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>Similar Resources:</h6>
+                        <div class="row">
+                            {% for doc, score in item.matches %}
+                            <div class="col-md-4">
+                                <div class="card mb-2">
+                                    <div class="card-body">
+                                        <p class="card-text small">{{ doc.metadata.source }}</p>
+                                        <span class="badge bg-info">Score: {{ score|floatformat:2 }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

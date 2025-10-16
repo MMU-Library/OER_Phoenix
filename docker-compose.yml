@@ -1,0 +1,62 @@
+# OER Recommender Prototype Docker Compose File
+
+services:
+  web:
+    build: .
+    command: >
+      sh -c "while ! nc -z db 5432; do sleep 1; echo 'Waiting for database...'; done;
+            ./docker-entrypoint.sh python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+
+  db:
+      image: pgvector/pgvector:pg14
+      volumes:
+        - postgres_data:/var/lib/postgresql/data/
+        - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      environment:
+        - POSTGRES_DB=oer_rebirth
+        - POSTGRES_USER=postgres
+        - POSTGRES_PASSWORD=postgres
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U postgres"]
+        interval: 5s
+        timeout: 5s
+        retries: 10
+
+  redis:
+    image: redis:7-alpine
+
+  celery: 
+    build: .
+    command: celery -A oer_rebirth worker -l info
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+
+  celery-beat:
+    build: .
+    command: celery -A oer_rebirth beat --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
