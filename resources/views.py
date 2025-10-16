@@ -153,7 +153,7 @@ def harvest_view(request, source_id):
     source = get_object_or_404(OERSource, pk=source_id)
     try:
         harvester = OERHarvester(source)
-        job = harvester.start_harvest_job()
+        job = harvester.harvest()
         messages.success(request, f"Started harvesting {source.name}")
         return redirect('admin:resources_harvestjob_changelist')
     except Exception as e:
@@ -166,7 +166,7 @@ def harvest_all_view(request):
     try:
         for source in sources:
             harvester = OERHarvester(source)
-            harvester.start_harvest_job()
+            harvester.harvest()
         messages.success(request, f"Started harvesting {sources.count()} sources")
     except Exception as e:
         messages.error(request, f"Error starting harvest: {str(e)}")
