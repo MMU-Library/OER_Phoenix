@@ -32,12 +32,38 @@ class OERHarvester:
         self.session = requests.Session()
         self.session.headers.update(source.request_headers or {})
         # Set longer timeouts for large responses
-        self.session.timeout = (30, 60)  # (connect timeout, read timeout)
+        self.session.timeout = (30, 120)  # (connect timeout, read timeout)
+        self.session.verify = True  # Enable SSL verification
         self.harvest_job = None
         
         # Rate limiting
         self.rate_limit_delay = 2.0  # seconds between requests
         self.last_request_time = 0
+        
+    def test_connection(self) -> Dict:
+        """Test the API connection with a minimal query"""
+        url = self.source.api_endpoint
+        params = {
+            "query": "*:*",
+            "expand": "metadata",
+            "limit": 1  # Just get one result to test
+        }
+        
+        try:
+            response = self.session.get(url, params=params, timeout=(30, 60))
+            response.raise_for_status()
+            return {
+                "success": True,
+                "message": "Connection successful",
+                "status_code": response.status_code,
+                "response_time": response.elapsed.total_seconds()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": str(e),
+                "error_type": type(e).__name__
+            }
     
     def harvest(self, max_pages: int = None, dry_run: bool = False) -> Dict:
         """

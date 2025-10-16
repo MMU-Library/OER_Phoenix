@@ -81,13 +81,18 @@ class OERSourceAdmin(admin.ModelAdmin):
         
         harvest_url = reverse('admin:harvest_oer_source', args=[obj.pk])
         view_jobs_url = reverse('admin:resources_harvestjob_changelist') + f'?source__id__exact={obj.pk}'
+        test_url = reverse('admin:test_oer_source_connection', args=[obj.pk])
         
         return format_html(
             '<a class="button" href="{}" style="background-color: #417690; '
             'color: white; padding: 5px 10px; text-decoration: none; '
             'border-radius: 3px; margin-right: 5px;">🌾 Harvest Now</a>'
+            '<a class="button" href="{}" style="background-color: #28a745; '
+            'color: white; padding: 5px 10px; text-decoration: none; '
+            'border-radius: 3px; margin-right: 5px;">🔍 Test Connection</a>'
             '<a class="button" href="{}" style="padding: 5px 10px;">View Jobs</a>',
             harvest_url,
+            test_url,
             view_jobs_url
         )
     harvest_action_buttons.short_description = 'Actions'

@@ -185,7 +185,21 @@ def add_preset_view(request):
     return redirect('admin:resources_oersource_changelist')
 
 def test_connection_view(request, source_id):
-    """Test connection to an OER source"""
+    """Handle test connection request for an OER source"""
+    source = get_object_or_404(OERSource, pk=source_id)
+    try:
+        harvester = OERHarvester(source)
+        result = harvester.test_connection()
+        
+        if result["success"]:
+            messages.success(request, f"Connection test successful! Response time: {result.get('response_time', 'N/A')}s")
+        else:
+            messages.error(request, f"Connection test failed: {result['message']}")
+            
+    except Exception as e:
+        messages.error(request, f"Error testing connection: {str(e)}")
+        
+    return redirect('admin:resources_oersource_changelist')
     source = get_object_or_404(OERSource, pk=source_id)
     try:
         harvester = OERHarvester(source)
