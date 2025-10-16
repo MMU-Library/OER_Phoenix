@@ -31,10 +31,12 @@ class OERHarvester:
         self.source = source
         self.session = requests.Session()
         self.session.headers.update(source.request_headers or {})
+        # Set longer timeouts for large responses
+        self.session.timeout = (30, 60)  # (connect timeout, read timeout)
         self.harvest_job = None
         
         # Rate limiting
-        self.rate_limit_delay = 1.0  # seconds between requests
+        self.rate_limit_delay = 2.0  # seconds between requests
         self.last_request_time = 0
     
     def harvest(self, max_pages: int = None, dry_run: bool = False) -> Dict:
