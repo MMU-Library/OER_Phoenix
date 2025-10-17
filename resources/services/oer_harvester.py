@@ -36,9 +36,12 @@ class OERHarvester:
         self.session.verify = True  # Enable SSL verification
         self.harvest_job = None
         
-        # Rate limiting
-        self.rate_limit_delay = 2.0  # seconds between requests
+        # Rate limiting configuration
+        self.rate_limit_delay = 5.0  # base delay between requests
+        self.max_retries = 5  # maximum number of retries
+        self.base_backoff = 30  # base backoff time in seconds
         self.last_request_time = 0
+        self.consecutive_429s = 0  # counter for consecutive rate limit errors
         
     def test_connection(self) -> Dict:
         """Test the API connection with a minimal query"""
@@ -238,27 +241,55 @@ class OERHarvester:
         return results
     
     def _make_request(self, url: str, params: Dict) -> Dict:
-        """Make HTTP request with error handling"""
-        try:
-            if self.source.request_method == 'POST':
-                response = self.session.post(
-                    url,
-                    json=params,
-                    timeout=30
-                )
-            else:
-                response = self.session.get(
-                    url,
-                    params=params,
-                    timeout=30
-                )
-            
-            response.raise_for_status()
-            return response.json()
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {str(e)}")
-            raise
+        """Make HTTP request with error handling and rate limiting"""
+        for attempt in range(self.max_retries):
+            try:
+                # Implement rate limiting delay
+                elapsed = time.time() - self.last_request_time
+                if elapsed < self.rate_limit_delay:
+                    time.sleep(self.rate_limit_delay - elapsed)
+                
+                # Make the request
+                if self.source.request_method == 'POST':
+                    response = self.session.post(url, json=params)
+                else:
+                    response = self.session.get(url, params=params)
+                
+                self.last_request_time = time.time()
+                
+                # Handle rate limiting response
+                if response.status_code == 429:
+                    self.consecutive_429s += 1
+                    retry_after = int(response.headers.get('Retry-After', self.base_backoff))
+                    # Exponential backoff
+                    wait_time = retry_after * (2 ** self.consecutive_429s)
+                    logger.warning(f"Rate limited. Waiting {wait_time} seconds before retry...")
+                    
+                    if self.harvest_job:
+                        self.harvest_job.add_log('warning', 
+                            f"Rate limited by API. Waiting {wait_time} seconds before continuing...")
+                    
+                    time.sleep(wait_time)
+                    continue
+                
+                # Reset consecutive 429s counter on successful request
+                self.consecutive_429s = 0
+                
+                response.raise_for_status()
+                return response.json()
+                
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request failed (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
+                
+                if attempt == self.max_retries - 1:
+                    raise
+                
+                # Exponential backoff for other errors
+                wait_time = self.base_backoff * (2 ** attempt)
+                logger.warning(f"Waiting {wait_time} seconds before retry...")
+                time.sleep(wait_time)
+        
+        raise Exception(f"Failed after {self.max_retries} attempts")
     
     def _extract_resources(self, response_data: Dict) -> List[Dict]:
         """Extract resource array from API response"""
@@ -379,16 +410,19 @@ class OERHarvester:
         """Get pagination parameters for current page"""
         config = self.source.pagination_config or {}
         
+        # Use a conservative page size to avoid overwhelming the API
+        default_page_size = 10
+        max_per_page = min(config.get('max_per_page', default_page_size), default_page_size)
+        
         if self.source.pagination_type == 'page_number':
             return {
                 config.get('page_param', 'page'): page,
-                config.get('per_page_param', 'per_page'): config.get('max_per_page', 100)
+                config.get('per_page_param', 'per_page'): max_per_page
             }
         elif self.source.pagination_type == 'offset_limit':
-            per_page = config.get('max_per_page', 100)
             return {
-                config.get('offset_param', 'offset'): (page - 1) * per_page,
-                config.get('limit_param', 'limit'): per_page
+                config.get('offset_param', 'start'): (page - 1) * max_per_page,
+                config.get('limit_param', 'limit'): max_per_page
             }
         
         return {}
