@@ -299,13 +299,26 @@ class OERHarvester:
         data = response_data
         for key in results_path.split('.'):
             if isinstance(data, dict):
-                data = data.get(key, [])
+                if key in data:
+                    data = data[key]
+                else:
+                    logger.warning(f"Key '{key}' not found in response data")
+                    return []
+            elif isinstance(data, list):
+                # If we hit a list before the end of our path, something's wrong
+                logger.warning(f"Unexpected list found at '{key}' in results path")
+                return []
             else:
-                break
+                logger.warning(f"Cannot navigate further at '{key}' in results path")
+                return []
         
         if isinstance(data, list):
+            # Log the first item for debugging
+            if data:
+                logger.debug(f"Sample resource data: {data[0]}")
             return data
         
+        logger.warning(f"Expected list at '{results_path}' but got {type(data)}")
         return []
     
     def _process_resource(self, resource_data: Dict, dry_run: bool) -> str:
@@ -320,6 +333,18 @@ class OERHarvester:
         # Map fields
         mapped_data = self._map_fields(resource_data)
         
+        # Handle URL construction for OAPEN/DOAB
+        if self.source.name.lower() in ['oapen library', 'directory of open access books']:
+            handle = mapped_data.get('url')
+            if handle:
+                # Convert Handle to URL
+                if handle.startswith('20.500.12854/'):
+                    # OAPEN Handle
+                    mapped_data['url'] = f"https://library.oapen.org/handle/{handle}"
+                elif handle.startswith('20.500.12657/'):
+                    # DOAB Handle
+                    mapped_data['url'] = f"https://www.doabooks.org/handle/{handle}"
+                    
         # Validate required fields
         if not mapped_data.get('title') or not mapped_data.get('url'):
             logger.warning(f"Missing required fields: {mapped_data}")
@@ -471,15 +496,19 @@ class PresetHarvesterConfigs:
             },
             'request_params': {
                 'query': '*:*',
-                'expand': 'metadata'
+                'expand': 'metadata,bitstreams',
+                'sort': 'dc.date.accessioned_dt desc'
             },
             'field_mappings': {
                 'title': 'metadata.dc.title[0]',
                 'description': 'metadata.dc.description.abstract[0]',
-                'url': 'handle',
+                'url': 'handle',  # Will be converted to full URL
                 'publisher': 'metadata.dc.publisher[0]',
                 'license': 'metadata.dc.rights[0]',
-                'subject_area': 'metadata.dc.subject[0]'
+                'subject_area': 'metadata.dc.subject[0]',
+                'author': 'metadata.dc.creator',
+                'publication_date': 'metadata.dc.date.issued[0]',
+                'language': 'metadata.dc.language.iso[0]'
             },
             'results_path': 'expand',
             'supports_pagination': True,
