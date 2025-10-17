@@ -3,6 +3,7 @@ Enhanced Django Admin for OER Source Management
 Includes "Harvest OER" button and management interface
 """
 
+import json
 from django.contrib import admin
 from django.urls import path, reverse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -28,6 +29,16 @@ class OERSourceAdmin(admin.ModelAdmin):
         'last_harvest_display',
         'harvest_action_buttons'
     ]
+    
+    change_form_template = 'admin/resources/oersource_change_form.html'
+    
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.presets = json.dumps({
+            'oapen': PresetHarvesterConfigs.get_oapen_config(),
+            'doab': PresetHarvesterConfigs.get_doab_config(),
+        })
+        return form
     
     list_filter = ['is_active', 'status']
     search_fields = ['name', 'description']

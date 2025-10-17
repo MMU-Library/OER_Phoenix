@@ -428,20 +428,24 @@ class PresetHarvesterConfigs:
         return {
             'name': 'OAPEN Library',
             'description': 'Open Access Publishing in European Networks',
-            'website': 'https://oapen.org',
+            'website': 'https://library.oapen.org',
             'source_type': 'rest_api',
             'api_endpoint': 'https://library.oapen.org/rest/search',
+            'request_method': 'GET',
+            'request_headers': {
+                'Accept': 'application/json'
+            },
             'request_params': {
                 'query': '*:*',
                 'expand': 'metadata'
             },
             'field_mappings': {
-                'title': 'metadata.dc.title',
-                'description': 'metadata.dc.description.abstract',
+                'title': 'metadata.dc.title[0]',
+                'description': 'metadata.dc.description.abstract[0]',
                 'url': 'handle',
-                'publisher': 'metadata.dc.publisher',
-                'license': 'metadata.dc.rights',
-                'subject_area': 'metadata.dc.subject',
+                'publisher': 'metadata.dc.publisher[0]',
+                'license': 'metadata.dc.rights[0]',
+                'subject_area': 'metadata.dc.subject[0]'
             },
             'results_path': 'expand',
             'supports_pagination': True,
@@ -449,13 +453,46 @@ class PresetHarvesterConfigs:
             'pagination_config': {
                 'offset_param': 'start',
                 'limit_param': 'limit',
-                'max_per_page': 100
-            }
+                'max_per_page': 10
+            },
+            'rate_limit_delay': 2.0  # seconds between requests
         }
     
     @staticmethod
     def get_doab_config():
         """DOAB (Directory of Open Access Books) configuration"""
+        return {
+            'name': 'Directory of Open Access Books',
+            'description': 'DOAB provides open access to scholarly books',
+            'website': 'https://www.doabooks.org',
+            'source_type': 'rest_api',
+            'api_endpoint': 'https://directory.doabooks.org/rest/search',
+            'request_method': 'GET',
+            'request_headers': {
+                'Accept': 'application/json'
+            },
+            'request_params': {
+                'query': '*:*',
+                'expand': 'metadata'
+            },
+            'field_mappings': {
+                'title': 'metadata.dc.title[0]',
+                'description': 'metadata.dc.description.abstract[0]',
+                'url': 'handle',
+                'publisher': 'metadata.dc.publisher[0]',
+                'license': 'metadata.dc.rights[0]',
+                'subject_area': 'metadata.dc.subject[0]'
+            },
+            'results_path': 'expand',
+            'supports_pagination': True,
+            'pagination_type': 'offset_limit',
+            'pagination_config': {
+                'offset_param': 'start',
+                'limit_param': 'limit',
+                'max_per_page': 10
+            },
+            'rate_limit_delay': 2.0  # seconds between requests
+        }
         return {
             'name': 'DOAB',
             'description': 'Directory of Open Access Books',

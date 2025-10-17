@@ -1,0 +1,78 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+.preset-config {
+    background: #f8f9fa;
+    padding: 15px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+.preset-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+.preset-field {
+    font-family: monospace;
+    margin: 5px 0;
+}
+.copy-button {
+    background: #417690;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            alert('Copied to clipboard!');
+        });
+    }
+    
+    window.copyPreset = function(presetName) {
+        const presets = JSON.parse('{{ adminform.form.presets|safe }}');
+        const preset = presets[presetName];
+        
+        // Update form fields
+        document.getElementById('id_name').value = preset.name;
+        document.getElementById('id_description').value = preset.description;
+        document.getElementById('id_website').value = preset.website;
+        document.getElementById('id_source_type').value = preset.source_type;
+        document.getElementById('id_api_endpoint').value = preset.api_endpoint;
+        document.getElementById('id_request_method').value = preset.request_method;
+        document.getElementById('id_request_headers').value = JSON.stringify(preset.request_headers, null, 2);
+        document.getElementById('id_request_params').value = JSON.stringify(preset.request_params, null, 2);
+        document.getElementById('id_field_mappings').value = JSON.stringify(preset.field_mappings, null, 2);
+        document.getElementById('id_results_path').value = preset.results_path;
+        document.getElementById('id_pagination_type').value = preset.pagination_type;
+        document.getElementById('id_pagination_config').value = JSON.stringify(preset.pagination_config, null, 2);
+    }
+});
+</script>
+{% endblock %}
+
+{% block after_field_sets %}
+<fieldset class="module aligned">
+    <h2>Preset Configurations</h2>
+    <div class="description">Click the buttons below to automatically fill the form with preset configurations for common OER sources.</div>
+    
+    <div class="preset-config">
+        <div class="preset-title">OAPEN Library</div>
+        <p>The OAPEN Library contains freely accessible academic books, mainly in the area of humanities and social sciences.</p>
+        <button type="button" class="copy-button" onclick="copyPreset('oapen')">Use OAPEN Configuration</button>
+    </div>
+    
+    <div class="preset-config">
+        <div class="preset-title">Directory of Open Access Books (DOAB)</div>
+        <p>DOAB is a discovery service for peer reviewed open access books and book publishers.</p>
+        <button type="button" class="copy-button" onclick="copyPreset('doab')">Use DOAB Configuration</button>
+    </div>
+</fieldset>
+{% endblock %}
