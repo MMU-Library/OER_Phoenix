@@ -1,11 +1,22 @@
-# .dockerignore
+# Add these new exclusions:
+/venv/
+/contextonly-notinproject/
+/static/
+/media/
+/resources/migrations/
+/.continue/
+/.env.example
+*.bk
+__pycache__/
+
+# Keep existing rules
 *.env
 *.log
 __pycache__/
 db.sqlite3
 *.pyc
 *.pyo
-*~
-*.swp
-.vscode/
-.git/
+*~ 
+contextonly-notinproject/
+continue/
+

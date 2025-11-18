@@ -55,3 +55,8 @@ postgres_data/
 *.pt
 *.pth
 chroma_db/
+
+
+#old/reference files
+contextonly-notinproject/
+continue/

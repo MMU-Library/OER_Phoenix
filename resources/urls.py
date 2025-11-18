@@ -1,37 +1,37 @@
 from django.urls import path
-from django.contrib import admin
-from django.views.generic import TemplateView
-from .views import (
-    ai_search, compare_view, csv_download, csv_upload, batch_ai_search, export_to_talis,
-    export_resources, export_success, talis_csv_template, talis_preview,
-    harvest_view, harvest_all_view, add_preset_view, test_connection_view
-)
+from . import views
 
 app_name = 'resources'
 
 urlpatterns = [
-    # Home page
-    path('', TemplateView.as_view(template_name='admin/resources/home.html'), name='home'),
+    # Home page - use the resources home template
+    path('', views.home, name='home'),
     
-    # Search and comparison
-    path('search/', ai_search, name='ai_search'),
-    path('compare/', compare_view, name='compare_resources'),
+    # Search and comparison - use resources templates
+    path('search/', views.ai_search, name='ai_search'),
+    path('compare/', views.compare_view, name='compare_resources'),
+
+    # CSV operations - mixed templates
+    path('download-csv/', views.csv_download, name='csv_download'),
+    path('upload-csv/', views.csv_upload, name='csv_upload'),  # Admin template
+    path('bulk-csv-upload/', views.bulk_csv_upload, name='bulk_csv_upload'),  # Admin template
+
+    # Export operations - mixed templates
+    path('export/', views.export_resources, name='export_resources'),  # Resources template
+    path('export/csv/', views.export_csv, name='export_csv'),
+    path('export/json/', views.export_json, name='export_json'),
+    path('export/talis/', views.export_to_talis, name='export_to_talis'),
+    path('export/talis/template/', views.talis_csv_template, name='talis_csv_template'),
+    path('export/talis/preview/', views.talis_preview, name='talis_preview'),
+    path('export/success/', views.export_success, name='export_success'),
+    path('export-data/', views.export_data, name='export_data'),  # Admin template
     
-    # CSV operations
-    path('download-csv/', csv_download, name='csv_download'),
-    path('upload/', csv_upload, name='csv_upload'),
-    path('batch-ai-search/', batch_ai_search, name='batch_ai_search'),
+    # OER Source management (admin functions) - Admin templates
+    path('harvest/<int:source_id>/', views.harvest_view, name='harvest_oer_source'),
+    path('test-connection/<int:source_id>/', views.test_connection_view, name='test_oer_source_connection'),
+    path('apply-preset/', views.apply_preset_view, name='apply_preset'),
     
-    # Export operations
-    path('export-to-talis/', export_to_talis, name='export_to_talis'),
-    path('export/', export_resources, name='export_resources'),
-    path('export-success/', export_success, name='export_success'),
-    path('talis-csv-template/', talis_csv_template, name='talis_csv_template'),
-    path('talis-preview/', talis_preview, name='talis_preview'),
-    
-    # OER Source management
-    path('harvest/<int:source_id>/', harvest_view, name='harvest_oer_source'),
-    path('harvest-all/', harvest_all_view, name='harvest_all_oer_sources'),
-    path('add-preset/', add_preset_view, name='add_preset_oer_source'),
-    path('test-connection/<int:source_id>/', test_connection_view, name='test_oer_source_connection'),
+    # Dynamic form handling - Admin templates
+    path('create-source/', views.create_source, name='create_source'),
+    path('load-configuration-form/', views.load_configuration_form, name='load_configuration_form'),
 ]

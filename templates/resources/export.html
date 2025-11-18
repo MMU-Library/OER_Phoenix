@@ -1,0 +1,67 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+    <h1>{% trans "Export OER Resources" %}</h1>
+    
+    <div class="module">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="form-group">
+                        <label for="{{ form.export_type.id_for_label }}" class="form-label">
+                            <strong>{% trans "Export Format" %}</strong>
+                        </label>
+                        <div class="form-check">
+                            {{ form.export_type }}
+                        </div>
+                        {% if form.export_type.errors %}
+                            <div class="text-danger">{{ form.export_type.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="submit-row">
+                        <button type="submit" class="btn btn-primary">{% trans "Export Resources" %}</button>
+                        <a href="{% url 'admin:resources_oersource_changelist' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="module" style="margin-top: 20px;">
+            <h2>{% trans "Export Statistics" %}</h2>
+            <table>
+                <tr>
+                    <th>{% trans "Total Resources" %}:</th>
+                    <td>{{ total_resources }}</td>
+                </tr>
+                <tr>
+                    <th>{% trans "Active Resources" %}:</th>
+                    <td>{{ active_resources }}</td>
+                </tr>
+                <tr>
+                    <th>{% trans "Last Export" %}:</th>
+                    <td>{{ last_export|default:"Never" }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+.form-check {
+    margin: 10px 0;
+}
+.form-check-input {
+    margin-right: 8px;
+}
+.submit-row {
+    margin: 20px 0;
+    padding: 10px 0;
+    border-top: 1px solid #eee;
+}
+</style>
+{% endblock %}

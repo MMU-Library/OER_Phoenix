@@ -4,7 +4,7 @@ services:
   web:
     build: .
     command: >
-      sh -c "while ! nc -z db 5432; do sleep 1; echo 'Waiting for database...'; done;
+      sh -c "while ! pg_isready -h db -U postgres; do sleep 2; echo 'Waiting for database...'; done;
             ./docker-entrypoint.sh python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
@@ -17,24 +17,30 @@ services:
         condition: service_started
     env_file:
       - .env
+    networks:
+      - oer_network
 
   db:
-      image: pgvector/pgvector:pg14
-      volumes:
-        - postgres_data:/var/lib/postgresql/data/
-        - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-      environment:
-        - POSTGRES_DB=oer_rebirth
-        - POSTGRES_USER=postgres
-        - POSTGRES_PASSWORD=postgres
-      healthcheck:
-        test: ["CMD-SHELL", "pg_isready -U postgres"]
-        interval: 5s
-        timeout: 5s
-        retries: 10
+    image: pgvector/pgvector:pg14
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_DB=oer_rebirth
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - oer_network
 
   redis:
     image: redis:7-alpine
+    networks:
+      - oer_network
 
   celery: 
     build: .
@@ -46,6 +52,8 @@ services:
       - .:/app
     env_file:
       - .env
+    networks:
+      - oer_network
 
   celery-beat:
     build: .
@@ -57,6 +65,12 @@ services:
       - redis
     env_file:
       - .env
+    networks:
+      - oer_network
 
 volumes:
   postgres_data:
+
+networks:
+  oer_network:
+    driver: bridge

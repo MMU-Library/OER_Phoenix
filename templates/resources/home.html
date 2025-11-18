@@ -1,0 +1,74 @@
+<!-- resources/templates/resources/home.html -->
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}OER Rebirth - Home{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h1>Welcome to OER Rebirth</h1>
+    <div class="dashboard">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📚 Resources</h5>
+                        <p class="card-text">{{ total_resources }} total resources</p>
+                        <a href="{% url 'admin:resources_oerresource_changelist' %}" class="btn btn-primary">Manage Resources</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">🌐 Sources</h5>
+                        <p class="card-text">{{ total_sources }} configured sources</p>
+                        <a href="{% url 'admin:resources_oersource_changelist' %}" class="btn btn-primary">Manage Sources</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">🔍 Search</h5>
+                        <p class="card-text">AI-powered search</p>
+                        <a href="{% url 'resources:ai_search' %}" class="btn btn-primary">Search Resources</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📊 Recent Harvest Jobs</h5>
+                        {% if recent_jobs %}
+                            <ul>
+                            {% for job in recent_jobs %}
+                                <li>{{ job.source.name }} - {{ job.started_at|date:"M d, Y H:i" }} - {{ job.get_status_display }}</li>
+                            {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p>No recent harvest jobs</p>
+                        {% endif %}
+                        <a href="{% url 'admin:resources_harvestjob_changelist' %}" class="btn btn-secondary">View All Jobs</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">🚀 Quick Actions</h5>
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'resources:create_source' %}" class="btn btn-success">Add New Source</a>
+                            <a href="{% url 'resources:csv_upload' %}" class="btn btn-info">Upload CSV</a>
+                            <a href="{% url 'resources:export_resources' %}" class="btn btn-warning">Export Data</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

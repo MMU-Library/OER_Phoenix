@@ -1,0 +1,206 @@
+name: Meta-RAG Enhanced OER Agents with Web Search
+version: "1.1"
+schema: v1
+
+# Continue's native models array (REQUIRED for detection)
+models:
+  - name: deepseek-r1:32b
+    provider: ollama
+    model: deepseek-r1:32b
+    apiBase: http://localhost:11434
+
+  - name: qwen2.5-coder:32b-instruct
+    provider: ollama
+    model: qwen2.5-coder:32b-instruct
+    apiBase: http://localhost:11434
+
+  - name: deepseek-coder-v2:16b
+    provider: ollama
+    model: deepseek-coder-v2:16b
+    apiBase: http://localhost:11434
+
+  - name: deepseek-coder:instruct
+    provider: ollama
+    model: deepseek-coder:instruct
+    apiBase: http://localhost:11434
+
+  - name: deepseek-llm:7b
+    provider: ollama
+    model: deepseek-llm:7b
+    apiBase: http://localhost:11434
+
+  - name: Autodetect
+    provider: ollama
+    model: AUTODETECT
+
+  - name: Autodetect (1)
+    provider: ollama
+    model: AUTODETECT
+
+  - name: Autodetect (2)
+    provider: ollama
+    model: AUTODETECT
+
+  - name: Autodetect (3)
+    provider: ollama
+    model: AUTODETECT
+
+# System-wide defaults
+default_model: deepseek-r1:32b
+
+environment:
+  OLLAMA_HOST: http://localhost:11434
+  OLLAMA_MODELS: C:\Users\55124152\.ollama\models
+  LOG_LEVEL: info
+  OLLAMA_MAX_LOADED_MODELS: "3"
+
+# Vector store configuration for Meta-RAG
+vector_store:
+  backend: chromadb
+  sources:
+    - code_summaries: path/to/code_summaries.db
+    - metadata_summaries: path/to/metadata_summaries.db
+  retrieval:
+    strategy: hierarchical
+
+# Web search configuration (for future implementation)
+web_search:
+  provider: duckduckgo
+  max_results: 5
+  context_injection: always
+  fallback_to_local: true
+  timeout: 10
+
+# Agent role definitions (for documentation/reference - not parsed by Continue)
+# These guide how you USE the models, not how Continue detects them
+agent_roles:
+  orchestrator:
+    description: Reasoning & routing coordinator
+    recommended_model: deepseek-r1:32b
+    parameters:
+      num_ctx: 32768
+      temperature: 0.4
+      top_p: 0.9
+    system_prompt: |
+      <think>
+      You are the coordinator for all OER code and metadata workflows.
+      - For each user query, retrieve the most relevant code and metadata summaries (file/class/function/schema).
+      - If the query involves harvesting, route to appropriate agent and pass retrieved context.
+      - When current/external information is needed, suggest using web search with relevant project context.
+      - Integrate web search results with local code summaries for comprehensive answers.
+      - Reason step-by-step and ask for missing code chunks or schema if context is insufficient.
+      - Return actionable responses or generate clarifying questions.
+      - Always cite sources when using external information.
+      </think>
+
+  web_search_specialist:
+    description: Web search for current information
+    recommended_model: qwen2.5-coder:32b-instruct
+    parameters:
+      num_ctx: 24576
+      temperature: 0.3
+      top_p: 0.85
+    system_prompt: |
+      <think>
+      You have web search capabilities for finding current information.
+      - When user requests current info (API changes, best practices, new standards), use web search.
+      - Always contextualize search results with project knowledge from provided summaries.
+      - Format searches to include project-specific context (e.g., "Django OAI-PMH 2025" not just "OAI-PMH").
+      - Cite sources clearly with URLs when available.
+      - Verify relevance before incorporating external information.
+      - If search results conflict with project code, flag for review.
+      </think>
+
+  api_harvester:
+    description: REST API specialist
+    recommended_model: qwen2.5-coder:32b-instruct
+    parameters:
+      num_ctx: 24576
+      temperature: 0.2
+      top_p: 0.8
+    system_prompt: |
+      <think>
+      You specialize in OER Commons and OpenStax REST API ingestion.
+      - Use only allowed endpoints, handle batch ops and rate limiting.
+      - Map fetched data to OERResource schema using provided summaries.
+      - On failures, refer to relevant config or code chunk for troubleshooting.
+      - If API behavior is unexpected, suggest searching for current API documentation.
+      - Validate input/output and never expose credentials.
+      </think>
+
+  oai_metadata_agent:
+    description: OAI-PMH harvester
+    recommended_model: deepseek-coder-v2:16b
+    parameters:
+      num_ctx: 16384
+      temperature: 0.35
+      top_p: 0.85
+    system_prompt: |
+      <think>
+      You perform bulk metadata harvesting via OAI-PMH.
+      - Issue compliant ListRecords/ListSets requests per config context.
+      - Use metadata summaries and config when handling set, date, or schema mapping.
+      - On mapping issues, request the specific schema or code summary required.
+      - If OAI-PMH endpoint behavior is unclear, suggest searching for current specs or repository documentation.
+      - Always return structured logs of fetch actions and errors.
+      </think>
+
+  mapping_agent:
+    description: Data mapping & QC
+    recommended_model: deepseek-coder:instruct
+    parameters:
+      num_ctx: 8000
+      temperature: 0.3
+      top_p: 0.9
+    system_prompt: |
+      <think>
+      You map and normalize ingested resource fields.
+      - Use code and schema summaries as reference for deduplication and enrichment.
+      - Always check license, accessibility, and perform updates only if data improves.
+      - When encountering unknown license types or metadata standards, suggest searching for clarification.
+      </think>
+
+  setup_agent:
+    description: User setup & guidance
+    recommended_model: deepseek-llm:7b
+    parameters:
+      num_ctx: 8192
+      temperature: 0.45
+      top_p: 0.85
+    system_prompt: |
+      <think>
+      You guide users through configuration, database setup, and source selection.
+      - Reference relevant code and metadata summaries to support step-by-step onboarding.
+      - Prevent misconfiguration and provide clear CLI/Docker Compose instructions.
+      - When users encounter environment-specific issues, suggest searching for platform-specific solutions.
+      </think>
+
+# Routing guidance (for your reference when prompting)
+routing_keywords:
+  web_search_triggers:
+    - current
+    - latest
+    - recent
+    - 2025
+    - best practices
+    - documentation
+    - API changes
+    - new standards
+  local_first_keywords:
+    - my code
+    - our implementation
+    - this project
+    - existing
+    - current codebase
+
+meta_rag:
+  summarize_on_change: true
+  chunk_granularity: file_class_function_endpoint
+  context_limit: 5
+  ask_for_missing_context: true
+  web_search_integration: true
+
+logging:
+  fetch_errors: fetch_errors.log
+  actions: agent_actions.log
+  web_searches: web_searches.log

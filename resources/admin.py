@@ -1,137 +1,184 @@
+# admin.py
 """
 Enhanced Django Admin for OER Source Management
-Includes "Harvest OER" button and management interface
+Uses unified form with JavaScript for dynamic behavior
 """
 
 import json
 from django.contrib import admin
 from django.urls import path, reverse
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from django.http import JsonResponse
-from resources.models import OERSource, HarvestJob, OERSourceFieldMapping
-from resources.services.oer_harvester import OERHarvester, PresetHarvesterConfigs
-from .views import harvest_view, harvest_all_view, add_preset_view, test_connection_view
+from django.http import HttpResponseRedirect, JsonResponse
+from django import forms
+
+from resources.models import OERSource, HarvestJob, OERSourceFieldMapping, OERResource
+from resources.harvesters.api_harvester import APIHarvester
+from resources.harvesters.oaipmh_harvester import OAIPMHHarvester
+from resources.forms import OERSourceForm  # Import the unified form
+
+# ---------------------------------------------------------------------------- #
+#                               Inline Admin                                    #
+# ---------------------------------------------------------------------------- #
 
 class OERSourceFieldMappingInline(admin.TabularInline):
-    """Inline admin for field mappings"""
     model = OERSourceFieldMapping
     extra = 1
 
+# ---------------------------------------------------------------------------- #
+#                               OER Source Admin                               #
+# ---------------------------------------------------------------------------- #
+
 @admin.register(OERSource)
 class OERSourceAdmin(admin.ModelAdmin):
-    list_display = [
-        'name',
-        'status_badge',
-        'harvest_stats',
-        'last_harvest_display',
-        'harvest_action_buttons'
-    ]
-    
-    change_form_template = 'admin/resources/oersource_change_form.html'
-    
-    def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
-        form.presets = json.dumps({
-            'oapen': PresetHarvesterConfigs.get_oapen_config(),
-            'doab': PresetHarvesterConfigs.get_doab_config(),
-        })
-        return form
-    
-    list_filter = ['is_active', 'status']
+    form = OERSourceForm  # Use the unified form
+    list_display = ['name', 'source_type', 'status_badge', 'last_harvest_display', 'harvest_action_buttons']
+    list_filter = ['source_type', 'status', 'is_active']
     search_fields = ['name', 'description']
-    readonly_fields = [
-        'status', 
-        'last_harvest_at', 
-        'last_harvest_count', 
-        'total_harvested', 
-        'last_error'
-    ]
+    readonly_fields = ['created_at', 'updated_at', 'total_harvested', 'last_harvest_at']
     
-    inlines = [OERSourceFieldMappingInline]
+    # Add JavaScript for dynamic form behavior
+    class Media:
+        js = ('admin/js/oer_source_dynamic.js',)
     
+    def get_fieldsets(self, request, obj=None):
+        """Single fieldset structure that works for all source types"""
+        fieldsets = [
+            ('Basic Information', {
+                'fields': ('name', 'description', 'source_type', 'is_active')
+            }),
+            ('Harvest Configuration', {
+                'fields': ('harvest_schedule', 'max_resources_per_harvest')
+            }),
+            ('API Configuration', {
+                'fields': ('api_endpoint', 'api_key', 'request_headers', 'request_params'),
+                'classes': ('api-config',)
+            }),
+            ('OAI-PMH Configuration', {
+                'fields': ('oaipmh_url', 'oaipmh_set_spec'),
+                'classes': ('oaipmh-config',)
+            }),
+            ('CSV Configuration', {
+                'fields': ('csv_url',),
+                'classes': ('csv-config',)
+            }),
+            ('Status & Metadata', {
+                'fields': ('status', 'total_harvested', 'last_harvest_at', 'created_at', 'updated_at'),
+                'classes': ('collapse',)
+            }),
+        ]
+        return fieldsets
+
+    def save_model(self, request, obj, form, change):
+        """Handle saving with proper status setting"""
+        if not change:  # New object
+            # Set default status based on source_type
+            if obj.source_type == 'API':
+                obj.status = 'testing'
+            elif obj.source_type == 'OAIPMH':
+                obj.status = 'active'
+            elif obj.source_type == 'CSV':
+                obj.status = 'active'
+        
+        super().save_model(request, obj, form, change)
+
     def status_badge(self, obj):
-        """Display status with color badge"""
         colors = {
             'active': 'green',
-            'inactive': 'gray',
+            'inactive': 'gray', 
             'testing': 'orange',
             'error': 'red',
         }
         color = colors.get(obj.status, 'gray')
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; '
-            'border-radius: 3px;">{}</span>',
-            color,
-            obj.get_status_display()
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            color, obj.get_status_display()
         )
     status_badge.short_description = 'Status'
-    
-    def harvest_stats(self, obj):
-        """Display harvest statistics"""
-        return format_html(
-            '<strong>{}</strong> total<br><small>Last: {}</small>',
-            obj.total_harvested,
-            obj.last_harvest_count
-        )
-    harvest_stats.short_description = 'Harvested'
-    
+
     def last_harvest_display(self, obj):
-        """Display last harvest time"""
         if obj.last_harvest_at:
             return obj.last_harvest_at.strftime('%Y-%m-%d %H:%M')
-        return mark_safe('<em>Never</em>')
+        return format_html('<em>Never</em>')
     last_harvest_display.short_description = 'Last Harvest'
-    
+
     def harvest_action_buttons(self, obj):
-        """Display harvest action buttons"""
         if not obj.is_active:
-            return mark_safe('<em>Inactive</em>')
+            return format_html('<em>Inactive</em>')
         
-        harvest_url = reverse('admin:harvest_oer_source', args=[obj.pk])
-        view_jobs_url = reverse('admin:resources_harvestjob_changelist') + f'?source__id__exact={obj.pk}'
-        test_url = reverse('admin:test_oer_source_connection', args=[obj.pk])
+        harvest_url = reverse('admin:resources_oersource_harvest', args=[obj.pk])
+        test_url = reverse('admin:resources_oersource_test', args=[obj.pk])
         
         return format_html(
-            '<a class="button" href="{}" style="background-color: #417690; '
-            'color: white; padding: 5px 10px; text-decoration: none; '
-            'border-radius: 3px; margin-right: 5px;">🌾 Harvest Now</a>'
-            '<a class="button" href="{}" style="background-color: #28a745; '
-            'color: white; padding: 5px 10px; text-decoration: none; '
-            'border-radius: 3px; margin-right: 5px;">🔍 Test Connection</a>'
-            '<a class="button" href="{}" style="padding: 5px 10px;">View Jobs</a>',
-            harvest_url,
-            test_url,
-            view_jobs_url
+            '''
+            <a class="button" href="{}" style="background-color: #417690; color: white; 
+            padding: 5px 10px; text-decoration: none; border-radius: 3px; margin-right: 5px;">🌾 Harvest</a>
+            <a class="button" href="{}" style="background-color: #28a745; color: white; 
+            padding: 5px 10px; text-decoration: none; border-radius: 3px;">🧪 Test</a>
+            ''',
+            harvest_url, test_url
         )
     harvest_action_buttons.short_description = 'Actions'
-    harvest_action_buttons.allow_tags = True
-    
+
     def get_urls(self):
-        """Add custom URLs for harvest actions"""
         urls = super().get_urls()
         custom_urls = [
-            path('harvest/<int:source_id>/', 
-                 self.admin_site.admin_view(harvest_view), 
-                 name='harvest_oer_source'),
-            path('harvest-all/', 
-                 self.admin_site.admin_view(harvest_all_view), 
-                 name='harvest_all_oer_sources'),
-            path('add-preset/', 
-                 self.admin_site.admin_view(add_preset_view), 
-                 name='add_preset_oer_source'),
-            path('test-connection/<int:source_id>/', 
-                 self.admin_site.admin_view(test_connection_view),
-                 name='test_oer_source_connection'),
+            path('harvest/<int:source_id>/', self.admin_site.admin_view(self.harvest_view), name='resources_oersource_harvest'),
+            path('test/<int:source_id>/', self.admin_site.admin_view(self.test_connection_view), name='resources_oersource_test'),
         ]
         return custom_urls + urls
 
+    def harvest_view(self, request, source_id):
+        """Handle harvesting for a specific source"""
+        source = OERSource.objects.get(id=source_id)
+        try:
+            # Determine the harvester class based on source configuration
+            if source.source_type == 'API':
+                harvester = APIHarvester(source)
+            elif source.source_type == 'OAIPMH':
+                harvester = OAIPMHHarvester(source)
+            else:
+                messages.error(request, f"Unsupported harvester type: {source.source_type}")
+                return HttpResponseRedirect(reverse('admin:resources_oersource_changelist'))
+
+            # Start harvest job
+            job = harvester.harvest()
+            messages.success(request, f"Started harvesting from {source.name} (Job: {job.id})")
+        except Exception as e:
+            messages.error(request, f"Harvesting failed: {str(e)}")
+        
+        return HttpResponseRedirect(reverse('admin:resources_oersource_changelist'))
+
+    def test_connection_view(self, request, source_id):
+        """Test connection to the source"""
+        source = OERSource.objects.get(id=source_id)
+        try:
+            # Determine the harvester class based on source configuration
+            if source.source_type == 'API':
+                harvester = APIHarvester(source)
+            elif source.source_type == 'OAIPMH':
+                harvester = OAIPMHHarvester(source)
+            else:
+                messages.error(request, f"Unsupported harvester type: {source.source_type}")
+                return HttpResponseRedirect(reverse('admin:resources_oersource_changelist'))
+
+            success = harvester.test_connection()
+            
+            if success:
+                messages.success(request, f"Successfully connected to {source.name}")
+            else:
+                messages.warning(request, f"Could not connect to {source.name}")
+                
+        except Exception as e:
+            messages.error(request, f"Connection test failed: {str(e)}")
+        
+        return HttpResponseRedirect(reverse('admin:resources_oersource_changelist'))
+
+# Keep your other admin classes unchanged for HarvestJob and OERResource
 @admin.register(HarvestJob)
 class HarvestJobAdmin(admin.ModelAdmin):
-    """Admin for viewing harvest job history"""
-    
     list_display = [
         'id',
         'source',
@@ -144,23 +191,23 @@ class HarvestJobAdmin(admin.ModelAdmin):
     list_filter = ['status', 'source', 'started_at']
     search_fields = ['source__name', 'error_message']
     readonly_fields = [
-        'source', 
-        'started_at', 
-        'completed_at', 
+        'source',
+        'started_at',
+        'completed_at',
         'status',
-        'resources_found', 
-        'resources_created', 
+        'resources_found',
+        'resources_created',
         'resources_updated',
-        'resources_skipped', 
-        'resources_failed', 
+        'resources_skipped',
+        'resources_failed',
         'pages_processed',
-        'api_calls_made', 
-        'error_message', 
+        'api_calls_made',
+        'error_message',
         'error_details',
-        'log_messages', 
+        'log_messages',
         'triggered_by'
     ]
-    
+
     fieldsets = (
         ('Job Information', {
             'fields': ('source', 'started_at', 'completed_at', 'status', 'triggered_by')
@@ -177,9 +224,8 @@ class HarvestJobAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    
+
     def status_badge(self, obj):
-        """Display status with color badge"""
         colors = {
             'pending': 'gray',
             'running': 'blue',
@@ -189,24 +235,22 @@ class HarvestJobAdmin(admin.ModelAdmin):
         }
         color = colors.get(obj.status, 'gray')
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; '
+            '<span style="background-color: {}; color: white; padding: 3px 10px;'
             'border-radius: 3px;">{}</span>',
             color,
             obj.get_status_display()
         )
     status_badge.short_description = 'Status'
-    
+
     def duration_display(self, obj):
-        """Display job duration"""
         if obj.duration:
             total_seconds = int(obj.duration.total_seconds())
             minutes, seconds = divmod(total_seconds, 60)
             return f"{minutes}m {seconds}s"
         return mark_safe('<em>In progress...</em>')
     duration_display.short_description = 'Duration'
-    
+
     def results_summary(self, obj):
-        """Display results summary"""
         return format_html(
             '<strong>+{}</strong> created, <strong>{}</strong> updated, <em>{}</em> skipped',
             obj.resources_created,
@@ -214,7 +258,48 @@ class HarvestJobAdmin(admin.ModelAdmin):
             obj.resources_skipped
         )
     results_summary.short_description = 'Results'
-    
+
     def has_add_permission(self, request):
-        """Prevent manual creation of harvest jobs"""
         return False
+
+@admin.register(OERResource)
+class OERResourceAdmin(admin.ModelAdmin):
+    list_display = [
+        'title',
+        'source',
+        'publisher',
+        'url_display',
+        'resource_type'
+    ]
+    
+    list_filter = ['source', 'resource_type', 'is_active', 'language']
+    search_fields = ['title', 'description', 'publisher', 'author']
+    readonly_fields = [
+        'content_embedding',
+        'created_at',
+        'updated_at',
+        'last_verified'
+    ]
+    
+    list_per_page = 50
+
+    def url_display(self, obj):
+        return format_html('<a href="{}" target="_blank">🔗 View</a>', obj.url)
+    url_display.short_description = 'URL'
+
+    fieldsets = (
+        (None, {
+            'fields': ('title', 'publisher', 'author', 'source')
+        }),
+        ('Content', {
+            'fields': ('description', 'url', 'license', 'resource_type', 'format')
+        }),
+        ('Details', {
+            'fields': ('subject', 'level', 'language', 'keywords', 'ai_generated_summary'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('is_active', 'content_embedding', 'created_at', 'updated_at', 'last_verified'),
+            'classes': ('collapse',)
+        }),
+    )

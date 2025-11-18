@@ -1,46 +1,58 @@
 #!/bin/sh
 
-# Simple database check and creation
-if [ -n "$DB_HOST" ]; then
-    echo "Waiting for database at $DB_HOST:$DB_PORT..."
-    while ! nc -z $DB_HOST $DB_PORT; do sleep 0.5; done
-    echo "Database ready!"
-fi
+# Wait for database to be ready
+echo "Waiting for database to be ready..."
+while ! pg_isready -h $DB_HOST -U $DB_USER; do
+  sleep 2
+done
 
 # Create the database if it doesn't exist
-echo "Checking if database exists and creating if necessary..."
+echo "Checking if database exists..."
 python manage.py shell -c "
-from django.conf import settings;
-import psycopg2;
+from django.conf import settings
+import psycopg2
 try:
     conn = psycopg2.connect(
-        dbname='oer_rebirth',
+        dbname='postgres',
         user='$DB_USER',
         password='$DB_PASSWORD',
         host='$DB_HOST'
     )
     conn.autocommit = True
     cursor = conn.cursor()
-    cursor.execute(\"SELECT 1 FROM pg_database WHERE datname='%s'\" % settings.DATABASES['default']['NAME'])
+    cursor.execute('SELECT 1 FROM pg_database WHERE datname=%s', [settings.DATABASES['default']['NAME']])
     exists = cursor.fetchone()
     if not exists:
-        cursor.execute(\"CREATE DATABASE %s WITH ENCODING 'UTF8' TEMPLATE template0;\" % settings.DATABASES['default']['NAME'])
+        cursor.execute('CREATE DATABASE \"' + settings.DATABASES['default']['NAME'] + '\" WITH ENCODING '\''UTF8'\'' TEMPLATE template0;')
+        print('Database created')
+    else:
+        print('Database already exists')
     cursor.close()
     conn.close()
 except Exception as e:
-    print('Error creating database:', str(e))
+    print('Database error:', str(e))
 "
+
+# Enable vector extension
+echo "Enabling vector extension..."
+python manage.py dbshell << EOF
+CREATE EXTENSION IF NOT EXISTS vector;
+\q
+EOF
+
+# Create missing migrations
+echo "Creating migrations..."
+python manage.py makemigrations --noinput
 
 # Run migrations
 echo "Running migrations..."
-python manage.py makemigrations resources
-python manage.py migrate
+python manage.py migrate --noinput
 
-# Create superuser non-interactively
+# Create superuser if it doesn't exist
 echo "Creating superuser..."
 python manage.py shell -c "
-from django.contrib.auth import get_user_model;
-User = get_user_model();
+from django.contrib.auth import get_user_model
+User = get_user_model()
 if not User.objects.filter(username='admin').exists():
     User.objects.create_superuser('admin', 'admin@example.com', 'adminpass')
     print('Superuser created')
@@ -48,6 +60,5 @@ else:
     print('Superuser already exists')
 "
 
-# Run the application
 echo "Starting Django server..."
 exec "$@"

@@ -1,0 +1,37 @@
+{% extends "admin/change_form.html" %}
+{% load crispy_forms_tags %}  {# ← Add this line #}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sourceTypeSelect = document.getElementById('id_source_type');
+    
+    if (sourceTypeSelect) {
+        loadConfigurationForm(sourceTypeSelect.value);
+        
+        sourceTypeSelect.addEventListener('change', function() {
+            loadConfigurationForm(this.value);
+        });
+    }
+});
+
+function loadConfigurationForm(sourceType) {
+    fetch(`/load-configuration-form/?source_type=${sourceType}`)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('configuration-form').innerHTML = html;
+        });
+}
+</script>
+{% endblock %}
+
+{% block after_field_sets %}
+<div id="configuration-form">
+    {% if source.source_type %}
+    {{ form|crispy }}  {# ← Also removed the space for consistency #}
+    {% else %}
+    <p>Select a source type to load the configuration form.</p>
+    {% endif %}
+</div>
+{% endblock %}
