@@ -43,30 +43,41 @@ class OAIPMHHarvester:
             # Fetch and process records
             records = self.fetch_and_process_records()
             
-            # Create OER resources
+            # Create or update OER resources
             created_count = 0
+            updated_count = 0
+            max_resources = getattr(self.source, 'max_resources_per_harvest', 0) or 0
+            if max_resources > 0:
+                records = records[:max_resources]
+
             for record_data in records:
                 try:
-                    oer_resource = OERResource.objects.create(
-                        title=record_data.get('title', ''),
-                        description=record_data.get('description', ''),
+                    resource, created = OERResource.objects.update_or_create(
                         url=record_data.get('url', ''),
-                        license=record_data.get('license', ''),
-                        publisher=record_data.get('publisher', ''),
-                        author=record_data.get('author', ''),
-                        language=record_data.get('language', 'en'),
-                        resource_type=record_data.get('resource_type', ''),
-                        source=self.source
+                        defaults={
+                            'title': record_data.get('title', ''),
+                            'description': record_data.get('description', ''),
+                            'license': record_data.get('license', ''),
+                            'publisher': record_data.get('publisher', ''),
+                            'author': record_data.get('author', ''),
+                            'language': record_data.get('language', 'en'),
+                            'resource_type': record_data.get('resource_type', ''),
+                            'source': self.source
+                        }
                     )
-                    created_count += 1
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
                 except Exception as e:
-                    logger.warning(f"Failed to create OER resource: {str(e)}")
+                    logger.warning(f"Failed to create/update OER resource: {str(e)}")
                     continue
 
             # Update harvest job
             harvest_job.status = 'completed'
             harvest_job.resources_found = len(records)
             harvest_job.resources_created = created_count
+            harvest_job.resources_updated = updated_count
             harvest_job.completed_at = timezone.now()
             harvest_job.save()
 
