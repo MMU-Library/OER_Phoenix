@@ -406,11 +406,11 @@ def apply_preset_view(request):
                 messages.error(request, f"Preset not found: {preset_key}")
                 return redirect('admin:resources_oersource_add')
             
-            # Convert dicts to JSON strings for the database
+            # Use dicts directly for JSONFields
             request_params = preset.get('request_params', {})
             request_headers = preset.get('request_headers', {})
-            
-            # Create the source with preset values
+
+            # Create the source with preset values (JSONFields accept dicts)
             source = OERSource.objects.create(
                 name=preset['name'],
                 description=preset['description'],
@@ -418,8 +418,8 @@ def apply_preset_view(request):
                 api_endpoint=preset.get('api_endpoint', ''),
                 oaipmh_url=preset.get('oaipmh_url', ''),
                 csv_url=preset.get('csv_url', ''),
-                request_params=json.dumps(request_params) if isinstance(request_params, dict) else request_params,
-                request_headers=json.dumps(request_headers) if isinstance(request_headers, dict) else request_headers,
+                request_params=request_params,
+                request_headers=request_headers,
                 oaipmh_set_spec=preset.get('oaipmh_set_spec', ''),
                 harvest_schedule=preset.get('harvest_schedule', 'manual'),
                 max_resources_per_harvest=preset.get('max_resources_per_harvest', 1000),

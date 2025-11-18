@@ -13,8 +13,8 @@ class PresetAPIConfigs:
             'name': 'OAPEN REST API',
             'description': 'Search OAPEN books via REST API',
             'api_endpoint': 'https://library.oapen.org/rest/search',
-            'request_params': '{"query": "*", "expand": "metadata"}',
-            'request_headers': '{"Accept": "application/json"}',
+            'request_params': {'query': '*', 'expand': 'metadata'},
+            'request_headers': {'Accept': 'application/json'},
             'harvest_schedule': 'manual',
             'max_resources_per_harvest': 1000
         }
@@ -26,8 +26,8 @@ class PresetAPIConfigs:
             'name': 'DOAB REST API',
             'description': 'Directory of Open Access Books via REST API',
             'api_endpoint': 'https://www.doabooks.org/rest/search',
-            'request_params': '{"query": "*", "format": "json"}',
-            'request_headers': '{"Accept": "application/json"}',
+            'request_params': {'query': '*', 'format': 'json'},
+            'request_headers': {'Accept': 'application/json'},
             'harvest_schedule': 'manual',
             'max_resources_per_harvest': 1000
         }
@@ -39,8 +39,8 @@ class PresetAPIConfigs:
             'name': 'MERLOT API',
             'description': 'MERLOT OER Repository API',
             'api_endpoint': 'https://api.merlot.org/materials',
-            'request_params': '{"format": "json", "per_page": 100}',
-            'request_headers': '{"Accept": "application/json"}',
+            'request_params': {'format': 'json', 'per_page': 100},
+            'request_headers': {'Accept': 'application/json'},
             'harvest_schedule': 'manual',
             'max_resources_per_harvest': 500
         }
@@ -52,8 +52,8 @@ class PresetAPIConfigs:
             'name': 'OpenStax API',
             'description': 'OpenStax OER Textbooks API',
             'api_endpoint': 'https://openstax.org/api/v2/pages',
-            'request_params': '{"type": "books.Book", "fields": "*"}',
-            'request_headers': '{"Accept": "application/json"}',
+            'request_params': {'type': 'books.Book', 'fields': '*'},
+            'request_headers': {'Accept': 'application/json'},
             'harvest_schedule': 'manual',
             'max_resources_per_harvest': 100
         }
