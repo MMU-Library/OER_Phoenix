@@ -1,5 +1,6 @@
 import requests
 import logging
+import time
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from resources.models import HarvestJob, OERResource
@@ -32,13 +33,30 @@ class APIHarvester:
             headers = config.get('headers', {})
             params = config.get('params', {})
             
-            response = requests.get(
-                test_url,
-                headers=headers,
-                params=params,
-                timeout=10
-            )
-            return response.status_code == 200
+            # Retry on transient failures
+            attempts = 0
+            while attempts < 3:
+                attempts += 1
+                try:
+                    response = requests.get(
+                        test_url,
+                        headers=headers,
+                        params=params,
+                        timeout=10
+                    )
+                    if response.status_code == 200:
+                        return True
+                    # treat 429/5xx as retryable
+                    if response.status_code in (429,) or 500 <= response.status_code < 600:
+                        logging.warning(f"API test attempt {attempts} returned {response.status_code}, retrying...")
+                        time.sleep(2 ** attempts)
+                        continue
+                    return False
+                except requests.RequestException as e:
+                    logger.warning(f"API connection attempt {attempts} failed: {e}")
+                    time.sleep(2 ** attempts)
+                    continue
+            return False
         except Exception as e:
             logger.error(f"API connection test failed: {str(e)}")
             return False
@@ -125,8 +143,25 @@ class APIHarvester:
                     headers['Authorization'] = f"Bearer {config['api_key']}"
             
             logger.info(f"Fetching API records from: {url}")
-            response = requests.get(url, headers=headers, params=params, timeout=30)
-            response.raise_for_status()
+            # Retry logic for API fetch
+            attempts = 0
+            response = None
+            while attempts < 4:
+                attempts += 1
+                try:
+                    response = requests.get(url, headers=headers, params=params, timeout=30)
+                    if response.status_code >= 500 or response.status_code == 429:
+                        logger.warning(f"API fetch attempt {attempts} returned {response.status_code}, retrying...")
+                        time.sleep(2 ** attempts)
+                        continue
+                    response.raise_for_status()
+                    break
+                except requests.RequestException as e:
+                    logger.warning(f"API fetch attempt {attempts} failed: {e}")
+                    time.sleep(2 ** attempts)
+                    continue
+            if response is None:
+                raise ValidationError("API fetch failed after retries")
             
             data = response.json()
             return self._process_api_response(data)
