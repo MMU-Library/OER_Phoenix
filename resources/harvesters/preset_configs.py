@@ -18,6 +18,25 @@ class PresetAPIConfigs:
             'harvest_schedule': 'manual',
             'max_resources_per_harvest': 1000
         }
+
+    @staticmethod
+    def get_oapen_books_api_config():
+        """OAPEN API but filtered to prefer book-level records.
+
+        NOTE: the exact query parameter for 'book' level may need adjusting
+        to match the remote API. This provides a conservative starting point
+        using a query term that often restricts to book-level items.
+        """
+        return {
+            'name': 'OAPEN REST API (Books)',
+            'description': 'OAPEN API restricted to book-level records',
+            'api_endpoint': 'https://library.oapen.org/rest/search',
+            # Conservative query - update if API uses a different filter key
+            'request_params': {'query': 'type:book', 'expand': 'metadata'},
+            'request_headers': {'Accept': 'application/json'},
+            'harvest_schedule': 'manual',
+            'max_resources_per_harvest': 1000
+        }
     
     @staticmethod
     def get_doab_api_config():
@@ -25,8 +44,8 @@ class PresetAPIConfigs:
         return {
             'name': 'DOAB REST API',
             'description': 'Directory of Open Access Books via REST API',
-            'api_endpoint': 'https://www.doabooks.org/rest/search',
-            'request_params': {'query': '*', 'format': 'json'},
+            'api_endpoint': 'https://directory.doabooks.org/rest/search',
+            'request_params': {'query': '*', 'expand': 'metadata'},
             'request_headers': {'Accept': 'application/json'},
             'harvest_schedule': 'manual',
             'max_resources_per_harvest': 1000
@@ -138,6 +157,7 @@ class PresetCSVConfigs:
 PRESET_CONFIGS = {
     'API': {
         'oapen': PresetAPIConfigs.get_oapen_api_config(),
+        'oapen_books': PresetAPIConfigs.get_oapen_books_api_config(),
         'doab': PresetAPIConfigs.get_doab_api_config(),
         'merlot': PresetAPIConfigs.get_merlot_api_config(),
         'openstax': PresetAPIConfigs.get_openstax_api_config(),
@@ -151,5 +171,23 @@ PRESET_CONFIGS = {
     'CSV': {
         'oer_commons': PresetCSVConfigs.get_oer_commons_csv_config(),
         'skills_commons': PresetCSVConfigs.get_skills_commons_csv_config(),
+    }
+}
+
+# MARCXML presets - allow admins to add MARCXML/dump-based sources
+PRESET_CONFIGS['MARCXML'] = {
+    'oapen': {
+        'name': 'OAPEN MARCXML dump',
+        'description': 'OAPEN MARCXML dump (books). Uses the OAPEN public MARCXML dump URL.',
+        'marcxml_url': 'https://memo.oapen.org/file/oapen/OAPENLibrary_MARCXML_books.xml',
+        'harvest_schedule': 'manual',
+        'max_resources_per_harvest': 1000
+    },
+    'doab': {
+        'name': 'DOAB MARCXML (if available)',
+        'description': 'DOAB MARCXML dump or export. Update URL to DOAB dump if you have one.',
+        'marcxml_url': 'https://directory.doabooks.org/metadata/marcxml',
+        'harvest_schedule': 'manual',
+        'max_resources_per_harvest': 1000
     }
 }

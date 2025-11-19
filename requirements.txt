@@ -17,6 +17,6 @@ tqdm
 django-environ
 requests
 coreschema
-self
-crispy
 django-crispy-forms
+django-crispy-forms
+pymarc

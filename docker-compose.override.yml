@@ -1,0 +1,10 @@
+version: '3.8'
+
+# Local development overrides: map Postgres port to host for convenience
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+# Note: This file is intended for local development only. Leave the main
+# docker-compose.yml unmodified for CI/production-like runs.

@@ -17,6 +17,8 @@ from django import forms
 from resources.models import OERSource, HarvestJob, OERSourceFieldMapping, OERResource
 from resources.harvesters.api_harvester import APIHarvester
 from resources.harvesters.oaipmh_harvester import OAIPMHHarvester
+from resources.harvesters.csv_harvester import CSVHarvester
+from resources.harvesters.marcxml_harvester import MARCXMLHarvester
 from resources.forms import OERSourceForm  # Import the unified form
 
 # ---------------------------------------------------------------------------- #
@@ -64,6 +66,10 @@ class OERSourceAdmin(admin.ModelAdmin):
                 'fields': ('csv_url',),
                 'classes': ('csv-config',)
             }),
+            ('MARCXML Configuration', {
+                'fields': ('marcxml_url',),
+                'classes': ('marcxml-config',)
+            }),
             ('Status & Metadata', {
                 'fields': ('status', 'total_harvested', 'last_harvest_at', 'created_at', 'updated_at'),
                 'classes': ('collapse',)
@@ -80,6 +86,8 @@ class OERSourceAdmin(admin.ModelAdmin):
             elif obj.source_type == 'OAIPMH':
                 obj.status = 'active'
             elif obj.source_type == 'CSV':
+                obj.status = 'active'
+            elif obj.source_type == 'MARCXML':
                 obj.status = 'active'
         
         super().save_model(request, obj, form, change)
@@ -139,12 +147,18 @@ class OERSourceAdmin(admin.ModelAdmin):
                 harvester = APIHarvester(source)
             elif source.source_type == 'OAIPMH':
                 harvester = OAIPMHHarvester(source)
+            elif source.source_type == 'CSV':
+                harvester = CSVHarvester(source)
+            elif source.source_type == 'MARCXML':
+                harvester = MARCXMLHarvester(source)
             else:
                 messages.error(request, f"Unsupported harvester type: {source.source_type}")
                 return HttpResponseRedirect(reverse('admin:resources_oersource_changelist'))
 
             # Start harvest job
             job = harvester.harvest()
+            source.status = 'active'
+            source.save(update_fields=['status'])
             messages.success(request, f"Started harvesting from {source.name} (Job: {job.id})")
         except Exception as e:
             messages.error(request, f"Harvesting failed: {str(e)}")
@@ -160,15 +174,23 @@ class OERSourceAdmin(admin.ModelAdmin):
                 harvester = APIHarvester(source)
             elif source.source_type == 'OAIPMH':
                 harvester = OAIPMHHarvester(source)
+            elif source.source_type == 'CSV':
+                harvester = CSVHarvester(source)
+            elif source.source_type == 'MARCXML':
+                harvester = MARCXMLHarvester(source)
             else:
                 messages.error(request, f"Unsupported harvester type: {source.source_type}")
                 return HttpResponseRedirect(reverse('admin:resources_oersource_changelist'))
 
             success = harvester.test_connection()
-            
+
             if success:
+                source.status = 'active'
+                source.save(update_fields=['status'])
                 messages.success(request, f"Successfully connected to {source.name}")
             else:
+                source.status = 'error'
+                source.save(update_fields=['status'])
                 messages.warning(request, f"Could not connect to {source.name}")
                 
         except Exception as e:

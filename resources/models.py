@@ -20,6 +20,7 @@ class OERSource(models.Model):
         ('API', 'API Harvester'),
         ('OAIPMH', 'OAI-PMH Harvester'),
         ('CSV', 'CSV Harvester'),  # ADDED CSV
+        ('MARCXML', 'MARCXML Harvester'),
     ]
     
     source_type = models.CharField(
@@ -73,6 +74,13 @@ class OERSource(models.Model):
         blank=True,
         null=True,
         help_text="CSV file URL for CSV harvesting"
+    )
+
+    # MARCXML Configuration
+    marcxml_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="MARCXML file URL for MARCXML harvesting (or dump URL)"
     )
     
     # Field Mappings

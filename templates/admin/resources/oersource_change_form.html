@@ -81,11 +81,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     params: '{"query": "*", "expand": "metadata"}',
                     headers: '{"Accept": "application/json"}'
                 },
+                'oapen_books': {
+                    name: 'OAPEN REST API (Books)',
+                    description: 'OAPEN API restricted to book-level records',
+                    endpoint: 'https://library.oapen.org/rest/search',
+                    params: '{"query": "type:book", "expand": "metadata"}',
+                    headers: '{"Accept": "application/json"}'
+                },
                 'doab': {
                     name: 'DOAB REST API',
                     description: 'Directory of Open Access Books via REST API',
-                    endpoint: 'https://www.doabooks.org/rest/search',
-                    params: '{"query": "*", "format": "json"}',
+                    endpoint: 'https://directory.doabooks.org/rest/search',
+                    params: '{"query": "*", "expand": "metadata"}',
                     headers: '{"Accept": "application/json"}'
                 },
                 'merlot': {
@@ -106,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'doab': {
                     name: 'DOAB OAI-PMH',
                     description: 'Directory of Open Access Books via OAI-PMH',
-                    url: 'https://www.doabooks.org/oaipmh',
+                    url: 'https://directory.doabooks.org/oaipmh',
                     set_spec: 'public'
                 },
                 'mit': {
@@ -127,6 +134,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     description: 'Skills Commons OER materials catalog',
                     url: 'https://www.skillscommons.org/export/oer.csv'
                 }
+            }
+            ,
+            'MARCXML': {
+                    'oapen': {
+                        name: 'OAPEN MARCXML dump',
+                        description: 'OAPEN MARCXML dump (books).',
+                        marcxml_url: 'https://memo.oapen.org/file/oapen/OAPENLibrary_MARCXML_books.xml'
+                    },
+                    'doab': {
+                        name: 'DOAB MARCXML dump',
+                        description: 'DOAB MARCXML dump (if available). Update to actual dump URL.',
+                        marcxml_url: 'https://directory.doabooks.org/metadata/marcxml'
+                    }
             }
         };
 
@@ -166,9 +186,26 @@ document.addEventListener('DOMContentLoaded', function() {
         // Focus on the name field
         document.getElementById('id_name').focus();
         
-        // Show success message
-        alert(`Applied ${preset.name} preset configuration!`);
+        // Show non-blocking banner message instead of blocking alert
+        showPresetBanner(`Applied ${preset.name} preset configuration!`);
     };
+    
+    function showPresetBanner(message) {
+        let existing = document.querySelector('.preset-applied-banner');
+        if (existing) existing.remove();
+        const banner = document.createElement('div');
+        banner.className = 'preset-applied-banner';
+        banner.textContent = message;
+        banner.style.background = '#e6ffed';
+        banner.style.border = '1px solid #b7f0c2';
+        banner.style.padding = '10px';
+        banner.style.margin = '10px 0';
+        banner.style.borderRadius = '4px';
+        const container = document.querySelector('.module.aligned') || document.body;
+        container.insertBefore(banner, container.firstChild);
+        // auto-hide after 6 seconds
+        setTimeout(() => { banner.remove(); }, 6000);
+    }
 });
 </script>
 {% endblock %}
@@ -184,13 +221,16 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="preset-title">🌐 API Sources</div>
         <p>Configure API-based OER sources with pre-configured endpoints</p>
         <div class="preset-grid">
-            <button type="button" class="preset-button specific" onclick="applyPreset('API', 'oapen')">
+            <button type="button" class="preset-button specific" data-type="API" onclick="applyPreset('API', 'oapen')">
                 OAPEN REST API
             </button>
-            <button type="button" class="preset-button specific" onclick="applyPreset('API', 'doab')">
+            <button type="button" class="preset-button specific" data-type="API" onclick="applyPreset('API', 'oapen_books')">
+                OAPEN (Books)
+            </button>
+            <button type="button" class="preset-button specific" data-type="API" onclick="applyPreset('API', 'doab')">
                 DOAB API
             </button>
-            <button type="button" class="preset-button specific" onclick="applyPreset('API', 'merlot')">
+            <button type="button" class="preset-button specific" data-type="API" onclick="applyPreset('API', 'merlot')">
                 MERLOT API
             </button>
         </div>
@@ -200,13 +240,13 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="preset-title">📚 OAI-PMH Sources</div>
         <p>Configure OAI-PMH compatible repositories</p>
         <div class="preset-grid">
-            <button type="button" class="preset-button specific" onclick="applyPreset('OAIPMH', 'oapen')">
+            <button type="button" class="preset-button specific" data-type="OAIPMH" onclick="applyPreset('OAIPMH', 'oapen')">
                 OAPEN OAI-PMH
             </button>
-            <button type="button" class="preset-button specific" onclick="applyPreset('OAIPMH', 'doab')">
+            <button type="button" class="preset-button specific" data-type="OAIPMH" onclick="applyPreset('OAIPMH', 'doab')">
                 DOAB OAI-PMH
             </button>
-            <button type="button" class="preset-button specific" onclick="applyPreset('OAIPMH', 'mit')">
+            <button type="button" class="preset-button specific" data-type="OAIPMH" onclick="applyPreset('OAIPMH', 'mit')">
                 MIT OCW
             </button>
         </div>
@@ -216,13 +256,26 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="preset-title">📊 CSV Sources</div>
         <p>Configure CSV file sources from major OER repositories</p>
         <div class="preset-grid">
-            <button type="button" class="preset-button specific" onclick="applyPreset('CSV', 'oer_commons')">
+            <button type="button" class="preset-button specific" data-type="CSV" onclick="applyPreset('CSV', 'oer_commons')">
                 OER Commons
             </button>
-            <button type="button" class="preset-button specific" onclick="applyPreset('CSV', 'skills_commons')">
+            <button type="button" class="preset-button specific" data-type="CSV" onclick="applyPreset('CSV', 'skills_commons')">
                 Skills Commons
             </button>
         </div>
     </div>
+
+            <div class="config-section">
+                <div class="preset-title">📜 MARCXML / Dump Sources</div>
+                <p>Configure MARCXML dump-based sources for book-level imports</p>
+                <div class="preset-grid">
+                    <button type="button" class="preset-button specific" data-type="MARCXML" onclick="applyPreset('MARCXML', 'oapen')">
+                        OAPEN MARCXML
+                    </button>
+                    <button type="button" class="preset-button specific" data-type="MARCXML" onclick="applyPreset('MARCXML', 'doab')">
+                        DOAB MARCXML
+                    </button>
+                </div>
+            </div>
 </div>
 {% endblock %}

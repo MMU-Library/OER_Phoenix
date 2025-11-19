@@ -20,6 +20,7 @@ from .forms import (
 )
 from .harvesters.api_harvester import APIHarvester
 from .harvesters.oaipmh_harvester import OAIPMHHarvester
+from .harvesters.csv_harvester import CSVHarvester
 from .harvesters.preset_configs import PresetAPIConfigs, PresetOAIPMHConfigs
 
 logger = logging.getLogger(__name__)
@@ -251,12 +252,17 @@ def harvest_view(request, source_id):
                 harvester = APIHarvester(source)
             elif source.source_type == 'OAIPMH':
                 harvester = OAIPMHHarvester(source)
+            elif source.source_type == 'CSV':
+                harvester = CSVHarvester(source)
             else:
                 messages.error(request, f"Unsupported harvester type: {source.source_type}")
                 return redirect('admin:resources_oersource_changelist')
 
             # Start harvest job
             job = harvester.harvest()
+            # Set status to active after successful harvest
+            source.status = 'active'
+            source.save(update_fields=['status'])
             messages.success(request, f"Started harvesting from {source.name} (Job: {job.id})")
             return redirect('admin:resources_harvestjob_changelist')
         
@@ -279,15 +285,21 @@ def test_connection_view(request, source_id):
             harvester = APIHarvester(source)
         elif source.source_type == 'OAIPMH':
             harvester = OAIPMHHarvester(source)
+        elif source.source_type == 'CSV':
+            harvester = CSVHarvester(source)
         else:
             messages.error(request, f"Unsupported harvester type: {source.source_type}")
             return redirect('admin:resources_oersource_changelist')
 
         success = harvester.test_connection()
-        
+
         if success:
+            source.status = 'active'
+            source.save(update_fields=['status'])
             messages.success(request, f"Successfully connected to {source.name}")
         else:
+            source.status = 'error'
+            source.save(update_fields=['status'])
             messages.warning(request, f"Could not connect to {source.name}")
             
     except Exception as e:
