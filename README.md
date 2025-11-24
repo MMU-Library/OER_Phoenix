@@ -238,3 +238,43 @@ If you expect more complex MARC sources, consider installing `MARCEdit` or adjus
 For issues and questions, please open an issue on GitHub.
 
 For issues and questions, please open an issue on GitHub.
+
+## Demo / Troubleshooting (Quick Checklist)
+
+- Create a Django superuser for Admin access:
+
+```bash
+python manage.py createsuperuser
+```
+
+- Run migrations and start the server:
+
+```bash
+python manage.py migrate
+python manage.py runserver
+```
+
+- Quick AI search smoke test (Django shell):
+
+```bash
+python manage.py shell
+>>> from resources.services.search_engine import OERSearchEngine
+>>> engine = OERSearchEngine()
+>>> print([ (r.resource.id, r.resource.title, r.final_score) for r in engine.hybrid_search('introduction to calculus', limit=5) ])
+```
+
+- If you plan to use Qdrant for scalable semantic search:
+  - Ensure the Qdrant service is running (included in `docker-compose.yml`).
+  - Populate `OERResource.content_embedding` for your resources (see `resources.services.ai_utils.generate_embeddings`).
+  - Reindex into Qdrant:
+
+```bash
+python manage.py reindex_qdrant
+```
+
+- Notes & common fixes:
+  - The semantic search prefers the `subject` model field (the UI accepts `subject_area` as a friendly name but it maps to `subject` internally).
+  - If Qdrant search fails due to client API differences, ensure `qdrant-client` is installed in your environment. The code contains compatibility shims for multiple `qdrant-client` versions.
+  - If you see no semantic hits, the system will fall back to a keyword-based search; ensure resources have `content_embedding` populated for best semantic results.
+
+This README section contains the minimal steps to demo the AI search and the admin UI. For reproducible demos, run the compose stack and create a superuser before harvesting or importing resources.

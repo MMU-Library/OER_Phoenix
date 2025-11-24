@@ -43,19 +43,29 @@ class BaseHarvester(ABC):
         try:
             # import model lazily
             from resources.models import OERResource
+            # Sanitize/truncate fields to fit model max_length constraints
+            def _t(v, maxlen=None):
+                if v is None:
+                    return ''
+                s = str(v)
+                if maxlen and len(s) > maxlen:
+                    return s[:maxlen]
+                return s
+
+            defaults = {
+                'title': _t(record_data.get('title', ''), maxlen=500),
+                'description': record_data.get('description', ''),
+                'license': _t(record_data.get('license', ''), maxlen=100),
+                'publisher': _t(record_data.get('publisher', ''), maxlen=200),
+                'author': _t(record_data.get('author', ''), maxlen=200),
+                'language': _t(record_data.get('language', 'en'), maxlen=50),
+                'resource_type': _t(record_data.get('resource_type', ''), maxlen=100),
+                'source': self.source
+            }
 
             resource, created = OERResource.objects.update_or_create(
-                url=record_data.get('url', ''),
-                defaults={
-                    'title': record_data.get('title', ''),
-                    'description': record_data.get('description', ''),
-                    'license': record_data.get('license', ''),
-                    'publisher': record_data.get('publisher', ''),
-                    'author': record_data.get('author', ''),
-                    'language': record_data.get('language', 'en'),
-                    'resource_type': record_data.get('resource_type', ''),
-                    'source': self.source
-                }
+                url=_t(record_data.get('url', ''), maxlen=500),
+                defaults=defaults
             )
             return resource, created
         except Exception:

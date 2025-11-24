@@ -11,7 +11,9 @@ from django.db.models.functions import Cast
 from pgvector.django import L2Distance, CosineDistance
 from resources.models import OERResource
 from resources.services.ai_utils import get_embedding_model
+from resources.ai_processing import get_retriever
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,9 @@ class OERSearchEngine:
             # 1. Generate query embedding
             logger.info(f"Processing search query: {query}")
             query_embedding = self.embedding_model.encode([query])[0]
+            # normalize to list for DB functions
+            if hasattr(query_embedding, 'tolist'):
+                query_embedding = query_embedding.tolist()
             
             # 2. Base queryset
             queryset = OERResource.objects.all()
@@ -71,21 +76,18 @@ class OERSearchEngine:
             if filters:
                 queryset = self._apply_filters(queryset, filters)
             
-            # 4. Perform vector similarity search
-            queryset = queryset.annotate(
-                vector_distance=L2Distance('embedding', query_embedding),
-                similarity=1 - F('vector_distance')  # Convert distance to similarity
-            ).filter(
-                embedding__isnull=False,
-                similarity__gte=self.similarity_threshold
-            )
-            
-            # 5. Apply keyword boost
-            queryset = self._apply_keyword_boost(queryset, query)
-            
-            # 6. Get results and apply quality boosting
+            # 4. Perform vector similarity search using retriever (Qdrant preferred)
+            retriever = get_retriever(preferred=os.environ.get('PREFERRED_RETRIEVER', 'qdrant'))
+            semantic_hits = retriever.get_similar_resources(query, k=limit * 2)
+
+            # Map hits (resource, score) into SearchResult objects
             results = []
-            for resource in queryset[:limit * 2]:  # Get extra for filtering
+            for resource, sim_score in semantic_hits:
+                # store similarity on resource for downstream scoring
+                try:
+                    resource.similarity = float(sim_score)
+                except Exception:
+                    resource.similarity = 0.0
                 result = self._calculate_final_score(resource, query)
                 results.append(result)
             
@@ -140,7 +142,7 @@ class OERSearchEngine:
                 Q(title__icontains=keyword) |
                 Q(description__icontains=keyword) |
                 Q(keywords__icontains=keyword) |
-                Q(subject_area__icontains=keyword)
+                Q(subject__icontains=keyword)
             )
         
         queryset = queryset.filter(q_objects).distinct()
@@ -168,34 +170,53 @@ class OERSearchEngine:
         """
         Apply faceted filters to queryset
         """
-        if 'subject_area' in filters:
-            queryset = queryset.filter(subject_area__iexact=filters['subject_area'])
-        
-        if 'educational_level' in filters:
-            queryset = queryset.filter(educational_level=filters['educational_level'])
-        
-        if 'license' in filters:
-            queryset = queryset.filter(license__icontains=filters['license'])
-        
-        if 'source' in filters:
-            queryset = queryset.filter(source=filters['source'])
-        
-        if 'min_quality' in filters:
-            queryset = queryset.filter(overall_quality_score__gte=filters['min_quality'])
-        
-        if 'peer_reviewed' in filters and filters['peer_reviewed']:
-            queryset = queryset.filter(
-                peer_review_status__in=['peer_reviewed', 'faculty_reviewed', 'approved']
-            )
-        
-        if 'accessible' in filters and filters['accessible']:
-            queryset = queryset.filter(accessibility_score__gte=0.8)
-        
-        if 'recently_updated' in filters and filters['recently_updated']:
+        # Map friendly filter names to actual model fields where possible
+        # Accept both 'subject_area' and 'subject' as incoming filter keys
+        field_map = {
+            'subject_area': 'subject',
+            'subject': 'subject',
+            'educational_level': 'level',
+            'level': 'level',
+            'license': 'license',
+            'source': 'source',
+        }
+
+        for key, val in filters.items():
+            if key in ('subject_area', 'subject', 'educational_level', 'level', 'license', 'source'):
+                model_field = field_map.get(key)
+                if model_field and model_field in [f.name for f in OERResource._meta.get_fields()]:
+                    if model_field == 'source':
+                        queryset = queryset.filter(source=val)
+                    else:
+                        queryset = queryset.filter(**{f"{model_field}__iexact": val})
+
+        # Numeric / boolean filters - only apply if model supports them
+        if 'min_quality' in filters and hasattr(OERResource, 'overall_quality_score'):
+            try:
+                queryset = queryset.filter(overall_quality_score__gte=filters['min_quality'])
+            except Exception:
+                pass
+
+        if 'peer_reviewed' in filters and filters['peer_reviewed'] and hasattr(OERResource, 'peer_review_status'):
+            try:
+                queryset = queryset.filter(peer_review_status__in=['peer_reviewed', 'faculty_reviewed', 'approved'])
+            except Exception:
+                pass
+
+        if 'accessible' in filters and filters['accessible'] and hasattr(OERResource, 'accessibility_score'):
+            try:
+                queryset = queryset.filter(accessibility_score__gte=0.8)
+            except Exception:
+                pass
+
+        if 'recently_updated' in filters and filters['recently_updated'] and hasattr(OERResource, 'updated_at'):
             from datetime import timedelta
             from django.utils import timezone
             cutoff = timezone.now() - timedelta(days=365)
-            queryset = queryset.filter(last_updated__gte=cutoff)
+            try:
+                queryset = queryset.filter(updated_at__gte=cutoff)
+            except Exception:
+                pass
         
         return queryset
     
@@ -212,9 +233,12 @@ class OERSearchEngine:
         """
         # Get base similarity score
         similarity_score = float(getattr(resource, 'similarity', 0))
-        
-        # Calculate quality boost
-        quality_boost = (resource.overall_quality_score / 5.0) * self.quality_weight
+        # Calculate quality boost (guard missing field)
+        overall_quality = getattr(resource, 'overall_quality_score', 0.0) or 0.0
+        try:
+            quality_boost = (float(overall_quality) / 5.0) * self.quality_weight
+        except Exception:
+            quality_boost = 0.0
         
         # Check for keyword matches (additional boost)
         keyword_boost = 0
@@ -231,7 +255,7 @@ class OERSearchEngine:
         match_reason = "semantic_match"
         if keyword_boost > 0:
             match_reason = "semantic_and_keyword"
-        if resource.is_featured:
+        if getattr(resource, 'is_featured', False):
             final_score *= 1.1  # 10% boost for featured resources
             match_reason += "_featured"
         
@@ -285,17 +309,17 @@ class OERSearchEngine:
         
         facets = {
             'subject_areas': list(
-                queryset.exclude(subject_area='')
-                .values_list('subject_area', flat=True)
+                queryset.exclude(subject='')
+                .values_list('subject', flat=True)
                 .distinct()
             ),
-            'educational_levels': [choice[0] for choice in OERResource._meta.get_field('educational_level').choices],
+            'educational_levels': [choice[0] for choice in OERResource._meta.get_field('level').choices],
             'licenses': list(
                 queryset.values_list('license', flat=True)
                 .distinct()
             ),
             'sources': list(
-                queryset.values_list('source', flat=True)
+                queryset.values_list('source__name', flat=True)
                 .distinct()
             ),
         }

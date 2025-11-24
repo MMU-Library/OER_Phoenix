@@ -15,6 +15,7 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django import forms
 
 from resources.models import OERSource, HarvestJob, OERSourceFieldMapping, OERResource
+from resources.models import TalisPushJob
 from resources.harvesters.api_harvester import APIHarvester
 from resources.harvesters.oaipmh_harvester import OAIPMHHarvester
 from resources.harvesters.csv_harvester import CSVHarvester
@@ -291,18 +292,24 @@ class OERResourceAdmin(admin.ModelAdmin):
         'source',
         'publisher',
         'url_display',
-        'resource_type'
+        'resource_type',
+        'overall_quality_score',  # Display in list view
     ]
-    
-    list_filter = ['source', 'resource_type', 'is_active', 'language']
+    list_filter = [
+        'source',
+        'resource_type',
+        'is_active',
+        'language',
+        'overall_quality_score',  # Allow admin filter
+    ]
     search_fields = ['title', 'description', 'publisher', 'author']
     readonly_fields = [
         'content_embedding',
         'created_at',
         'updated_at',
-        'last_verified'
+        'last_verified',
+        'overall_quality_score',  # Make it read-only in admin
     ]
-    
     list_per_page = 50
 
     def url_display(self, obj):
@@ -321,7 +328,24 @@ class OERResourceAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Metadata', {
-            'fields': ('is_active', 'content_embedding', 'created_at', 'updated_at', 'last_verified'),
+            'fields': (
+                'is_active',
+                'content_embedding',
+                'created_at',
+                'updated_at',
+                'last_verified',
+                'overall_quality_score'  # Add to metadata fieldset
+            ),
             'classes': ('collapse',)
         }),
     )
+
+
+@admin.register(TalisPushJob)
+class TalisPushJobAdmin(admin.ModelAdmin):
+    list_display = ['id', 'status', 'target_url', 'created_at', 'started_at', 'completed_at', 'response_code']
+    readonly_fields = ['created_at', 'started_at', 'completed_at', 'status', 'response_code', 'response_body', 'report_snapshot']
+    search_fields = ['target_url']
+    list_filter = ['status']
+    def has_add_permission(self, request):
+        return False

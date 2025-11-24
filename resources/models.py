@@ -169,6 +169,9 @@ class OERResource(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     last_verified = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+
+    #Quality Metrics
+    overall_quality_score = models.FloatField(default=0.0, db_index=True)
     
     class Meta:
         verbose_name = "OER Resource"
@@ -289,3 +292,30 @@ class HarvestJob(models.Model):
     @property
     def total_resources_harvested(self):
         return self.resources_created + self.resources_updated
+
+
+class TalisPushJob(models.Model):
+    """Tracks asynchronous pushes of AI reports to Talis (or other endpoints)."""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    target_url = models.URLField(blank=True, null=True)
+    response_code = models.IntegerField(null=True, blank=True)
+    response_body = models.TextField(blank=True)
+    report_snapshot = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        verbose_name = "Talis Push Job"
+        verbose_name_plural = "Talis Push Jobs"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"TalisPushJob {self.id} ({self.get_status_display()})"

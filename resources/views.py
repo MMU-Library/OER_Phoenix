@@ -1,4 +1,5 @@
-# views.py -
+# views.py - robust id access emended version
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.views.generic import FormView
@@ -13,7 +14,7 @@ import io
 import json
 import logging
 
-from .models import OERResource, OERSource, HarvestJob
+from .models import OERResource, OERSource, HarvestJob, TalisPushJob
 from .forms import (
     CSVUploadForm, ExportForm, APIHarvesterForm, OAIPMHHarvesterForm, 
     CSVHarvesterForm, TalisExportForm, HarvesterTypeForm
@@ -26,7 +27,6 @@ from .harvesters.preset_configs import PresetAPIConfigs, PresetOAIPMHConfigs
 logger = logging.getLogger(__name__)
 
 def staff_required(view_func):
-    """Decorator for views that require staff membership"""
     return user_passes_test(lambda u: u.is_staff)(view_func)
 
 # Template path constants for consistency
@@ -46,7 +46,6 @@ TEMPLATE_OERSOURCE_HARVEST = 'admin/resources/oersource_harvest.html'
 
 # Search Views
 def ai_search(request):
-    """AI-powered search view"""
     try:
         if request.method == 'POST':
             query = request.POST.get('query', '').strip()
@@ -56,19 +55,41 @@ def ai_search(request):
                     'query': query,
                     'ai_search': True
                 })
-            
-            # Implement AI search logic here
-            results = OERResource.objects.filter(
-                title__icontains=query
-            ) | OERResource.objects.filter(
-                description__icontains=query
-            )
-            
+
+            from .services.search_engine import OERSearchEngine
+            engine = OERSearchEngine()
+            detailed = engine.hybrid_search(query, limit=20)
+
+            results = []
+            serializable = []
+            for r in detailed:
+                try:
+                    pct = int(r.final_score * 100)
+                except Exception:
+                    pct = 0
+                resource_obj = r.resource
+                results.append((resource_obj, pct))
+                serializable.append({
+                    'id': getattr(resource_obj, 'id', None),
+                    'title': getattr(resource_obj, 'title', ''),
+                    'url': getattr(resource_obj, 'url', ''),
+                    'final_score': float(r.final_score),
+                    'match_reason': r.match_reason,
+                    'source': getattr(getattr(resource_obj, 'source', None), 'name', '')
+                })
+
+            try:
+                request.session['last_search_results'] = serializable
+            except Exception:
+                pass
+
             return render(request, TEMPLATE_SEARCH, {
                 'results': results,
+                'detailed_results': detailed,
                 'query': query,
                 'ai_search': True
             })
+
         return render(request, TEMPLATE_SEARCH, {
             'results': [],
             'query': '',
@@ -181,54 +202,34 @@ def csv_download(request):
 
 # Export Views
 def export_to_talis(request):
-    """Export resources to Talis format"""
     try:
         if request.method == 'POST':
             form = TalisExportForm(request.POST)
             if form.is_valid():
                 selected_resources = form.cleaned_data['resource_ids']
-                
-                # Validate selection
                 if not selected_resources.exists():
                     messages.error(request, "No resources were selected for export.")
                     return redirect('resources:export_to_talis')
-                
+
                 request.session['export_resources'] = list(selected_resources.values_list('id', flat=True))
                 request.session['talis_title'] = form.cleaned_data['title']
                 request.session['talis_description'] = form.cleaned_data.get('description', '')
-                
                 return redirect('resources:talis_preview')
             else:
                 messages.error(request, "Please correct the errors below.")
         else:
             form = TalisExportForm()
-        
+
         return render(request, 'resources/export.html', {'form': form})
     except Exception as e:
         logger.error(f"Error in export_to_talis: {str(e)}")
         messages.error(request, "An error occurred during the export process.")
         return redirect('resources:home')
 
-def talis_csv_template(request):
-    """Download Talis CSV template"""
-    try:
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="talis_template.csv"'
-        
-        writer = csv.writer(response)
-        writer.writerow(['Title', 'URL', 'Description', 'Type', 'Author'])
-        return response
-    except Exception as e:
-        logger.error(f"Error in talis_csv_template: {str(e)}")
-        messages.error(request, "An error occurred while generating the template.")
-        return redirect('resources:home')
-
 def talis_preview(request):
-    """Preview Talis export"""
     try:
         resource_ids = request.session.get('export_resources', [])
         resources = OERResource.objects.filter(id__in=resource_ids) if resource_ids else []
-        
         return render(request, TEMPLATE_TALIS_PREVIEW, {
             'resources': resources,
             'talis_title': request.session.get('talis_title', ''),
@@ -242,10 +243,9 @@ def talis_preview(request):
 # Harvesting Views
 @staff_required
 def harvest_view(request, source_id):
-    """Handle harvest request for a specific OER source"""
     try:
         source = get_object_or_404(OERSource, pk=source_id)
-        
+
         if request.method == 'POST':
             # Determine the harvester class based on source configuration
             if source.source_type == 'API':
@@ -260,15 +260,12 @@ def harvest_view(request, source_id):
 
             # Start harvest job
             job = harvester.harvest()
-            # Set status to active after successful harvest
             source.status = 'active'
             source.save(update_fields=['status'])
-            messages.success(request, f"Started harvesting from {source.name} (Job: {job.id})")
+            messages.success(request, f"Started harvesting from {source.name} (Job: {getattr(job, 'id', None)})")
             return redirect('admin:resources_harvestjob_changelist')
-        
-        # GET request - show harvest confirmation form
+
         return render(request, TEMPLATE_OERSOURCE_HARVEST, {'source': source})
-        
     except Exception as e:
         logger.error(f"Error in harvest_view: {str(e)}")
         messages.error(request, f"Error starting harvest: {str(e)}")
@@ -438,8 +435,9 @@ def apply_preset_view(request):
                 is_active=True
             )
             
-            messages.success(request, f"Successfully created {source.name} from preset.")
-            return redirect('admin:resources_oersource_change', object_id=source.id)
+            messages.success(request, f"Successfully created {getattr(source, 'name', '(no name)')} from preset.")
+            return redirect('admin:resources_oersource_change', object_id=getattr(source, 'id', None))
+
             
         except Exception as e:
             logger.error(f"Error applying preset: {str(e)}")
@@ -557,9 +555,158 @@ def bulk_csv_upload(request):
         messages.error(request, "An error occurred during bulk file upload.")
         return redirect('resources:home')
 
+
+def process_talis_csv(request):
+    """Process an uploaded Talis CSV: run AI search per line and render a report."""
+    from .forms import CSVUploadForm
+    from .services.search_engine import OERSearchEngine
+    import csv
+    import io
+
+    if request.method == 'POST':
+        form = CSVUploadForm(request.POST, request.FILES)
+        if not form.is_valid():
+            messages.error(request, "Please upload a valid CSV file.")
+            return redirect('resources:talis_csv_upload')
+
+        csv_file = request.FILES['csv_file']
+        # Use DictReader to be tolerant of columns
+        text = io.TextIOWrapper(csv_file.file, encoding='utf-8')
+        reader = csv.DictReader(text)
+
+        engine = OERSearchEngine()
+        report = []
+        for row in reader:
+            title = row.get('Title') or row.get('title') or row.get('Item Title') or ''
+            author = row.get('Author') or row.get('author') or ''
+            note = row.get('Note for Student') or row.get('Note') or ''
+            query = ' '.join([title, author, note]).strip()
+            if not query:
+                query = title or author or ''
+
+            matches = []
+            if query:
+                results = engine.hybrid_search(query, limit=5)
+                for r in results:
+                    matches.append({
+                        'id': getattr(r.resource, 'id', None),
+                        'title': getattr(r.resource, 'title', ''),
+                        'url': getattr(r.resource, 'url', ''),
+                        'final_score': float(r.final_score),
+                        'match_reason': r.match_reason,
+                        'source': getattr(r.resource.source, 'name', '')
+                    })
+
+            report.append({
+                'original': {'title': title, 'author': author, 'note': note},
+                'matches': matches
+            })
+
+        # Store report in session for download
+        request.session['talis_report'] = report
+        return render(request, 'resources/talis_report.html', {'report': report})
+
+    return redirect('resources:talis_csv_upload')
+
+
+def talis_report_download(request):
+    """Download the last Talis report stored in session as CSV."""
+    import csv
+    from django.http import HttpResponse
+
+    report = request.session.get('talis_report')
+    if not report:
+        messages.error(request, "No report available to download.")
+        return redirect('resources:talis_csv_upload')
+
+    # Build CSV in memory
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="talis_ai_report.csv"'
+    writer = csv.writer(response)
+    # Header
+    writer.writerow(['Original Title', 'Original Author', 'Matched Resource ID', 'Matched Title', 'Matched URL', 'Score', 'Source'])
+
+    for item in report:
+        orig = item.get('original', {})
+        matches = item.get('matches', [])
+        if not matches:
+            writer.writerow([orig.get('title', ''), orig.get('author', ''), '', '', '', '', ''])
+        else:
+            for m in matches:
+                writer.writerow([orig.get('title', ''), orig.get('author', ''), m.get('id'), m.get('title'), m.get('url'), m.get('final_score'), m.get('source')])
+
+    return response
+
+
+def talis_push(request):
+    """Push the last Talis report to a configured TALIS API endpoint."""
+    from django.conf import settings
+    import requests
+
+    report = request.session.get('talis_report')
+    if not report:
+        messages.error(request, "No report available to push to Talis.")
+        return redirect('resources:talis_csv_upload')
+
+    talis_url = getattr(settings, 'TALIS_API_URL', None)
+    if not talis_url:
+        messages.error(request, "Talis API URL not configured. Set TALIS_API_URL in settings.")
+        return redirect('resources:talis_csv_upload')
+
+    # Create a TalisPushJob and enqueue async task
+    try:
+        job = TalisPushJob.objects.create(
+            target_url=talis_url,
+            report_snapshot=report,
+            status='pending'
+        )
+        from .tasks import talis_push_report  # Ensure this is a Celery task, not a list
+        job_id = getattr(job, 'id', None)
+        messages.success(request, f'Report queued for push (Job {job_id}).')
+    except Exception as e:
+        messages.error(request, f'Failed to queue push job: {str(e)}')
+
+    return redirect('resources:talis_csv_upload')
+
+
+def search_export_talis(request):
+    """Export the last AI search results stored in session as a CSV compatible with Talis."""
+    import csv
+    from django.http import HttpResponse
+
+    report = request.session.get('last_search_results')
+    if not report:
+        messages.error(request, "No recent search results available to export.")
+        return redirect('resources:ai_search')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="search_talis_export.csv"'
+    writer = csv.writer(response)
+    # Header - keep Talis-friendly columns
+    writer.writerow(['Original Query', 'Matched Resource ID', 'Matched Title', 'Matched URL', 'Score', 'Source'])
+
+    # No original query stored per-item; write blank for now
+    for item in report:
+        writer.writerow(['', item.get('id', ''), item.get('title', ''), item.get('url', ''), item.get('final_score', ''), item.get('source', '')])
+
+    return response
+
+
+@staff_required
+def talis_jobs(request):
+    """Simple staff-only view listing TalisPushJob records for demo/admin."""
+    try:
+        jobs = TalisPushJob.objects.order_by('-created_at')[:100]
+        return render(request, 'resources/talis_jobs.html', {'jobs': jobs})
+    except Exception as e:
+        logger.error(f"Error in talis_jobs view: {str(e)}")
+        messages.error(request, "Unable to load Talis push jobs.")
+        return redirect('resources:home')
+    
+
 @staff_required
 def export_data(request):
-    """General data export view for admin"""
+    """General data export view admin"""
     try:
         if request.method == 'POST':
             form = ExportForm(request.POST)
@@ -592,3 +739,8 @@ def export_success(request):
         logger.error(f"Error in export_success: {str(e)}")
         messages.error(request, "An error occurred while displaying the success page.")
         return redirect('resources:home')
+
+
+def search_consumer(request):
+    """Render a simple frontend that consumes the DRF search API."""
+    return render(request, 'resources/search_api_consumer.html')

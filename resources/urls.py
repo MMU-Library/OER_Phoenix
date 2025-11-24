@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import api
 
 app_name = 'resources'
 
@@ -21,7 +22,7 @@ urlpatterns = [
     path('export/csv/', views.export_csv, name='export_csv'),
     path('export/json/', views.export_json, name='export_json'),
     path('export/talis/', views.export_to_talis, name='export_to_talis'),
-    path('export/talis/template/', views.talis_csv_template, name='talis_csv_template'),
+    path('export/talis/template/', views.talis_push, name='talis_csv_template'),
     path('export/talis/preview/', views.talis_preview, name='talis_preview'),
     path('export/success/', views.export_success, name='export_success'),
     path('export-data/', views.export_data, name='export_data'),  # Admin template
@@ -34,4 +35,16 @@ urlpatterns = [
     # Dynamic form handling - Admin templates
     path('create-source/', views.create_source, name='create_source'),
     path('load-configuration-form/', views.load_configuration_form, name='load_configuration_form'),
+    # API endpoints
+    path('api/search/', api.SearchAPIView.as_view(), name='api_search'),
+    # Simple frontend consumer for the API
+    path('search/consumer/', views.search_consumer, name='search_consumer'),
+    # Talis CSV processing (batch AI search)
+    path('talis/upload/', views.bulk_csv_upload, name='talis_csv_upload'),
+    path('talis/process/', views.process_talis_csv, name='talis_process_csv'),
+    path('talis/report/download/', views.talis_report_download, name='talis_report_download'),
+    path('talis/push/', views.talis_push, name='talis_push'),
+    path('search/export/talis/', views.search_export_talis, name='search_export_talis'),
+    # Admin/demo: list recent Talis push jobs
+    path('talis/jobs/', views.talis_jobs, name='talis_jobs'),
 ]

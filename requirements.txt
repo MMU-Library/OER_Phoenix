@@ -20,3 +20,4 @@ coreschema
 django-crispy-forms
 django-crispy-forms
 pymarc
+qdrant-client>=1.8.0

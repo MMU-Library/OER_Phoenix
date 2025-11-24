@@ -312,10 +312,6 @@ class AccessibilityChecker:
 
 
 class ContentValidator:
-    """
-    Validate OER content quality and appropriateness
-    """
-    
     @staticmethod
     def validate_educational_alignment(resource, course_learning_objectives: list) -> float:
         """
@@ -330,13 +326,28 @@ class ContentValidator:
         
         model = get_embedding_model()
         
-        # Get embeddings
+        def _to_numpy(x):
+            """Helper to safely convert tensors or other types to NumPy arrays."""
+            if hasattr(x, "cpu"):  # PyTorch tensor
+                return x.cpu().numpy()
+            elif isinstance(x, list):
+                return np.array([_to_numpy(item) for item in x], dtype=np.float32)
+            else:
+                return np.array(x, dtype=np.float32)
+        
+        # Get embeddings and convert to NumPy arrays
         resource_embedding = model.encode([resource.learning_objectives])[0]
+        resource_embedding = _to_numpy(resource_embedding)
+        
         course_embeddings = model.encode(course_learning_objectives)
+        course_embeddings = np.stack([_to_numpy(vec) for vec in course_embeddings])
         
         # Calculate maximum similarity across all course objectives
         from sklearn.metrics.pairwise import cosine_similarity
-        similarities = cosine_similarity([resource_embedding], course_embeddings)[0]
+        similarities = cosine_similarity(
+            resource_embedding.reshape(1, -1),
+            course_embeddings
+        )[0]
         
         return float(np.max(similarities))
     
@@ -359,3 +370,4 @@ class ContentValidator:
             'is_appropriate': len(issues) == 0,
             'issues': issues
         }
+    
