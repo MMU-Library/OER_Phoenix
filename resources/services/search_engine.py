@@ -4,174 +4,146 @@ Unified search system with semantic + keyword hybrid search,
 quality-based ranking, and filtering capabilities
 """
 
-from typing import List, Dict, Optional, Tuple
+import logging
+from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
-from django.db.models import Q, F, FloatField, QuerySet
-from django.db.models.functions import Cast
-from pgvector.django import L2Distance, CosineDistance
+from django.db.models import Q, QuerySet
 from resources.models import OERResource
 from resources.services.ai_utils import get_embedding_model
-from resources.ai_processing import get_retriever
-import logging
-import os
+import numpy as np
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class SearchResult:
     """Structured search result with scoring"""
     resource: OERResource
-    similarity_score: float
-    quality_boost: float
-    final_score: float
-    match_reason: str
-
+    similarity_score: float = 0.0
+    quality_boost: float = 0.0
+    final_score: float = 0.0
+    match_reason: str = ""
 
 class OERSearchEngine:
     """
-    Unified search engine for OER resources
-    Combines semantic similarity, keyword matching, and quality metrics
+    Unified search engine for OER resources,
+    using semantic similarity, keyword matching, and quality metrics.
     """
-    
     def __init__(self):
         self.embedding_model = get_embedding_model()
-        self.similarity_threshold = 0.65  # Configurable threshold
-        self.quality_weight = 0.3  # Weight for quality score in ranking
-        self.keyword_boost = 0.15  # Boost for keyword matches
-    
-    def semantic_search(
-        self, 
-        query: str, 
-        filters: Optional[Dict] = None,
-        limit: int = 20,
-        include_inactive: bool = False
-    ) -> List[SearchResult]:
-        """
-        Enhanced semantic search with filtering capabilities
-        
-        Args:
-            query: Natural language search query
-            filters: Dictionary of filters (subject_area, educational_level, license, etc.)
-            limit: Maximum number of results
-            include_inactive: Whether to include inactive resources
-            
-        Returns:
-            List of SearchResult objects with scoring details
-        """
-        try:
-            # 1. Generate query embedding
-            logger.info(f"Processing search query: {query}")
-            query_embedding = self.embedding_model.encode([query])[0]
-            # normalize to list for DB functions
-            if hasattr(query_embedding, 'tolist'):
-                query_embedding = query_embedding.tolist()
-            
-            # 2. Base queryset
-            queryset = OERResource.objects.all()
-            if not include_inactive:
-                queryset = queryset.filter(is_active=True)
-            
-            # 3. Apply filters
-            if filters:
-                queryset = self._apply_filters(queryset, filters)
-            
-            # 4. Perform vector similarity search using retriever (Qdrant preferred)
-            retriever = get_retriever(preferred=os.environ.get('PREFERRED_RETRIEVER', 'qdrant'))
-            semantic_hits = retriever.get_similar_resources(query, k=limit * 2)
+        self.similarity_threshold = 0.45
+        self.quality_weight = 0.3
+        self.keyword_weight = 0.7
 
-            # Map hits (resource, score) into SearchResult objects
+    def _get_resource_quality_score(self, resource: OERResource) -> float:
+        # Primary: field on model
+        score = getattr(resource, 'overall_quality_score', None)
+        if score is not None:
+            return float(score)
+        # Fallback: check for JSONField, e.g., quality_scores
+        if hasattr(resource, 'quality_scores'):
+            val = resource.quality_scores.get('overall', 0.0)
+            return float(val) if val else 0.0
+        return 0.0
+
+    def _cosine_similarity(self, a: Any, b: Any) -> float:
+        # Convert to arrays and compute numpy-cosine
+        a = np.array(a).astype(float)
+        b = np.array(b).astype(float)
+        if np.linalg.norm(a) == 0 or np.linalg.norm(b) == 0:
+            return 0.0
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+    def semantic_search(
+        self, query: str, filters: Optional[Dict] = None, limit: int = 20, include_inactive: bool = False
+    ) -> List[SearchResult]:
+        try:
+            logger.info(f"AI Search: Query = '{query}'")
+            query_embedding = self.embedding_model.encode([query])[0]
+            # Candidates with valid embeddings only
+            qs = OERResource.objects.all()
+            if not include_inactive:
+                qs = qs.filter(is_active=True)
+            if filters:
+                qs = self._apply_filters(qs, filters)
+            candidates = [r for r in qs if getattr(r, "content_embedding", None) is not None]
+            logger.info(f"AI Search: {len(candidates)} resources with embeddings")
             results = []
-            for resource, sim_score in semantic_hits:
-                # store similarity on resource for downstream scoring
+            for res in candidates:
+                emb = res.content_embedding
+                if not isinstance(emb, (list, np.ndarray)):
+                    emb = list(emb) if hasattr(emb, 'tolist') else emb
                 try:
-                    resource.similarity = float(sim_score)
-                except Exception:
-                    resource.similarity = 0.0
-                result = self._calculate_final_score(resource, query)
-                results.append(result)
-            
-            # 7. Sort by final score and limit
+                    sim = self._cosine_similarity(query_embedding, emb)
+                except Exception as e:
+                    logger.warning(f"Cosine similarity error for resource {res.id}: {e}")
+                    sim = 0.0
+                quality_score = self._get_resource_quality_score(res)
+                quality_boost = (quality_score / 5.0) * self.quality_weight
+                final = sim + quality_boost
+                results.append(SearchResult(
+                    resource=res,
+                    similarity_score=sim,
+                    quality_boost=quality_boost,
+                    final_score=final,
+                    match_reason="semantic"
+                ))
             results.sort(key=lambda x: x.final_score, reverse=True)
             return results[:limit]
-            
         except Exception as e:
-            logger.error(f"Search error: {str(e)}")
+            logger.error(f"Semantic search error: {e}")
             return []
-    
-    def hybrid_search(
-        self,
-        query: str,
-        filters: Optional[Dict] = None,
-        limit: int = 20
-    ) -> List[SearchResult]:
-        """
-        Hybrid search combining semantic and keyword approaches
-        """
-        # Get semantic results
-        semantic_results = self.semantic_search(query, filters, limit)
-        
-        # Get keyword results
-        keyword_results = self._keyword_search(query, filters, limit)
-        
-        # Merge and deduplicate
-        combined = self._merge_results(semantic_results, keyword_results, limit)
-        return combined
-    
+
     def _keyword_search(
-        self,
-        query: str,
-        filters: Optional[Dict] = None,
-        limit: int = 20
+        self, query: str, filters: Optional[Dict] = None, limit: int = 20
     ) -> List[SearchResult]:
-        """
-        Traditional keyword-based search as fallback
-        """
-        queryset = OERResource.objects.filter(is_active=True)
-        
-        # Apply filters
+        qs = OERResource.objects.filter(is_active=True)
         if filters:
-            queryset = self._apply_filters(queryset, filters)
-        
-        # Search in multiple fields
+            qs = self._apply_filters(qs, filters)
         keywords = query.lower().split()
-        q_objects = Q()
-        
-        for keyword in keywords:
-            q_objects |= (
-                Q(title__icontains=keyword) |
-                Q(description__icontains=keyword) |
-                Q(keywords__icontains=keyword) |
-                Q(subject__icontains=keyword)
+        qobj = Q()
+        for kw in keywords:
+            qobj |= (
+                Q(title__icontains=kw) |
+                Q(description__icontains=kw) |
+                Q(keywords__icontains=kw) |
+                Q(subject__icontains=kw)
             )
-        
-        queryset = queryset.filter(q_objects).distinct()
-        
-        # Convert to SearchResult objects
+        qs = qs.filter(qobj).distinct()
         results = []
-        for resource in queryset[:limit]:
-            # Calculate simple relevance score
-            title_matches = sum(1 for kw in keywords if kw in resource.title.lower())
-            desc_matches = sum(1 for kw in keywords if kw in resource.description.lower())
-            keyword_score = (title_matches * 0.6 + desc_matches * 0.4) / len(keywords)
-            
-            result = SearchResult(
-                resource=resource,
-                similarity_score=keyword_score,
-                quality_boost=resource.overall_quality_score / 5.0,
-                final_score=keyword_score * 0.7 + (resource.overall_quality_score / 5.0) * 0.3,
-                match_reason="keyword_match"
-            )
-            results.append(result)
-        
+        for res in qs[:limit]:
+            title_hits = sum(1 for kw in keywords if kw in res.title.lower())
+            desc_hits = sum(1 for kw in keywords if kw in res.description.lower())
+            score = (title_hits * 0.6 + desc_hits * 0.4) / max(1, len(keywords))
+            quality_score = self._get_resource_quality_score(res)
+            quality_boost = (quality_score / 5.0) * self.quality_weight
+            final = score * self.keyword_weight + quality_boost
+            results.append(SearchResult(
+                resource=res,
+                similarity_score=score,
+                quality_boost=quality_boost,
+                final_score=final,
+                match_reason="keyword"
+            ))
         return results
-    
-    def _apply_filters(self, queryset: QuerySet, filters: Dict) -> QuerySet:
-        """
-        Apply faceted filters to queryset
-        """
-        # Map friendly filter names to actual model fields where possible
-        # Accept both 'subject_area' and 'subject' as incoming filter keys
+
+    def hybrid_search(
+        self, query: str, filters: Optional[Dict] = None, limit: int = 20
+    ) -> List[SearchResult]:
+        semantic_hits = self.semantic_search(query, filters, limit)
+        keyword_hits = self._keyword_search(query, filters, limit)
+        # Deduplicate by resource ID, merge scores and reasons
+        merged = {}
+        for entry in (semantic_hits + keyword_hits):
+            rid = getattr(entry.resource, "id", None)
+            if rid in merged:
+                merged[rid].final_score = max(merged[rid].final_score, entry.final_score)
+                merged[rid].match_reason += "|hybrid"
+            else:
+                merged[rid] = entry
+        sorted_results = sorted(merged.values(), key=lambda x: x.final_score, reverse=True)
+        return sorted_results[:limit]
+
+    def _apply_filters(self, qs: QuerySet, filters: Dict) -> QuerySet:
         field_map = {
             'subject_area': 'subject',
             'subject': 'subject',
@@ -180,238 +152,44 @@ class OERSearchEngine:
             'license': 'license',
             'source': 'source',
         }
-
         for key, val in filters.items():
-            if key in ('subject_area', 'subject', 'educational_level', 'level', 'license', 'source'):
-                model_field = field_map.get(key)
-                if model_field and model_field in [f.name for f in OERResource._meta.get_fields()]:
-                    if model_field == 'source':
-                        queryset = queryset.filter(source=val)
-                    else:
-                        queryset = queryset.filter(**{f"{model_field}__iexact": val})
+            model_field = field_map.get(key)
+            if model_field and model_field in [f.name for f in OERResource._meta.get_fields()]:
+                if model_field == 'source':
+                    qs = qs.filter(source=val)
+                else:
+                    qs = qs.filter(**{f"{model_field}__iexact": val})
+        if 'min_quality' in filters:
+            qs = qs.filter(overall_quality_score__gte=filters['min_quality'])
+        return qs
 
-        # Numeric / boolean filters - only apply if model supports them
-        if 'min_quality' in filters and hasattr(OERResource, 'overall_quality_score'):
-            try:
-                queryset = queryset.filter(overall_quality_score__gte=filters['min_quality'])
-            except Exception:
-                pass
-
-        if 'peer_reviewed' in filters and filters['peer_reviewed'] and hasattr(OERResource, 'peer_review_status'):
-            try:
-                queryset = queryset.filter(peer_review_status__in=['peer_reviewed', 'faculty_reviewed', 'approved'])
-            except Exception:
-                pass
-
-        if 'accessible' in filters and filters['accessible'] and hasattr(OERResource, 'accessibility_score'):
-            try:
-                queryset = queryset.filter(accessibility_score__gte=0.8)
-            except Exception:
-                pass
-
-        if 'recently_updated' in filters and filters['recently_updated'] and hasattr(OERResource, 'updated_at'):
-            from datetime import timedelta
-            from django.utils import timezone
-            cutoff = timezone.now() - timedelta(days=365)
-            try:
-                queryset = queryset.filter(updated_at__gte=cutoff)
-            except Exception:
-                pass
-        
-        return queryset
-    
-    def _apply_keyword_boost(self, queryset: QuerySet, query: str) -> QuerySet:
-        """
-        Boost results that match keywords in title/description
-        """
-        # This is primarily for ordering; actual boosting happens in final score
-        return queryset.select_related().prefetch_related('faculty_reviews', 'course_mappings')
-    
-    def _calculate_final_score(self, resource: OERResource, query: str) -> SearchResult:
-        """
-        Calculate final ranking score with quality boosting
-        """
-        # Get base similarity score
-        similarity_score = float(getattr(resource, 'similarity', 0))
-        # Calculate quality boost (guard missing field)
-        overall_quality = getattr(resource, 'overall_quality_score', 0.0) or 0.0
-        try:
-            quality_boost = (float(overall_quality) / 5.0) * self.quality_weight
-        except Exception:
-            quality_boost = 0.0
-        
-        # Check for keyword matches (additional boost)
-        keyword_boost = 0
-        query_lower = query.lower()
-        if query_lower in resource.title.lower():
-            keyword_boost += self.keyword_boost * 0.6
-        if query_lower in resource.description.lower():
-            keyword_boost += self.keyword_boost * 0.4
-        
-        # Calculate final score
-        final_score = similarity_score + quality_boost + keyword_boost
-        
-        # Determine match reason
-        match_reason = "semantic_match"
-        if keyword_boost > 0:
-            match_reason = "semantic_and_keyword"
-        if getattr(resource, 'is_featured', False):
-            final_score *= 1.1  # 10% boost for featured resources
-            match_reason += "_featured"
-        
-        return SearchResult(
-            resource=resource,
-            similarity_score=similarity_score,
-            quality_boost=quality_boost,
-            final_score=final_score,
-            match_reason=match_reason
-        )
-    
-    def _merge_results(
-        self,
-        semantic_results: List[SearchResult],
-        keyword_results: List[SearchResult],
-        limit: int
-    ) -> List[SearchResult]:
-        """
-        Merge and deduplicate semantic and keyword search results
-        """
-        # Create dict with resource ID as key
-        merged = {}
-        
-        for result in semantic_results:
-            merged[result.resource.id] = result
-        
-        for result in keyword_results:
-            if result.resource.id in merged:
-                # Boost score if found in both
-                existing = merged[result.resource.id]
-                existing.final_score = max(existing.final_score, result.final_score) * 1.15
-                existing.match_reason = "hybrid_match"
-            else:
-                merged[result.resource.id] = result
-        
-        # Convert back to list and sort
-        final_results = list(merged.values())
-        final_results.sort(key=lambda x: x.final_score, reverse=True)
-        
-        return final_results[:limit]
-    
     def get_facets(self, query: str = None) -> Dict:
-        """
-        Get available facets/filters for the current query
-        """
-        queryset = OERResource.objects.filter(is_active=True)
-        
-        if query:
-            # TODO: Apply query filter if needed
-            pass
-        
+        qs = OERResource.objects.filter(is_active=True)
         facets = {
-            'subject_areas': list(
-                queryset.exclude(subject='')
-                .values_list('subject', flat=True)
-                .distinct()
-            ),
+            'subject_areas': list(qs.exclude(subject='').values_list('subject', flat=True).distinct()),
             'educational_levels': [choice[0] for choice in OERResource._meta.get_field('level').choices],
-            'licenses': list(
-                queryset.values_list('license', flat=True)
-                .distinct()
-            ),
-            'sources': list(
-                queryset.values_list('source__name', flat=True)
-                .distinct()
-            ),
+            'licenses': list(qs.values_list('license', flat=True).distinct()),
+            'sources': list(qs.values_list('source__name', flat=True).distinct()),
         }
-        
         return facets
-    
+
     def search_by_course(
-        self,
-        course_code: str,
-        institution: str = None
+        self, course_code: str, institution: str = None
     ) -> List[SearchResult]:
-        """
-        Find resources already mapped to a specific course
-        """
         from resources.models import CourseMapping
-        
-        queryset = CourseMapping.objects.filter(
-            course_code=course_code,
-            is_active=True
-        )
-        
+        qs = CourseMapping.objects.filter(course_code=course_code, is_active=True)
         if institution:
-            queryset = queryset.filter(institution=institution)
-        
+            qs = qs.filter(institution=institution)
         results = []
-        for mapping in queryset.select_related('resource'):
-            result = SearchResult(
-                resource=mapping.resource,
+        for mapping in qs.select_related('resource'):
+            resource = mapping.resource
+            quality_score = self._get_resource_quality_score(resource)
+            results.append(SearchResult(
+                resource=resource,
                 similarity_score=mapping.match_confidence,
-                quality_boost=mapping.resource.overall_quality_score / 5.0,
+                quality_boost=(quality_score / 5.0) * self.quality_weight,
                 final_score=mapping.match_confidence,
                 match_reason="course_mapping"
-            )
-            results.append(result)
-        
+            ))
         results.sort(key=lambda x: x.final_score, reverse=True)
         return results
-
-
-class SearchAnalytics:
-    """Track and analyze search patterns"""
-    
-    @staticmethod
-    def log_search(query: str, user=None, results_count: int = 0, filters: Dict = None):
-        """Log a search query for analytics"""
-        from resources.models import SearchQuery
-        import uuid
-        
-        SearchQuery.objects.create(
-            query_text=query,
-            user=user,
-            results_count=results_count,
-            filters_applied=filters or {},
-            session_id=str(uuid.uuid4())
-        )
-    
-    @staticmethod
-    def log_resource_click(resource_id: int, user=None, search_query_id: int = None):
-        """Log when a resource is clicked from search results"""
-        from resources.models import SearchQuery, ResourceAccessLog
-        
-        if search_query_id:
-            try:
-                search_query = SearchQuery.objects.get(id=search_query_id)
-                clicked = search_query.clicked_results
-                if resource_id not in clicked:
-                    clicked.append(resource_id)
-                    search_query.clicked_results = clicked
-                    search_query.save()
-            except SearchQuery.DoesNotExist:
-                pass
-        
-        # Also log access
-        ResourceAccessLog.objects.create(
-            resource_id=resource_id,
-            user=user
-        )
-    
-    @staticmethod
-    def get_popular_searches(days: int = 30, limit: int = 10) -> List[Tuple[str, int]]:
-        """Get most popular search queries"""
-        from resources.models import SearchQuery
-        from django.utils import timezone
-        from datetime import timedelta
-        from django.db.models import Count
-        
-        cutoff = timezone.now() - timedelta(days=days)
-        
-        popular = SearchQuery.objects.filter(
-            created_at__gte=cutoff
-        ).values('query_text').annotate(
-            count=Count('id')
-        ).order_by('-count')[:limit]
-        
-        return [(item['query_text'], item['count']) for item in popular]

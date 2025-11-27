@@ -12,14 +12,13 @@ import logging
 from typing import List, Tuple
 import numpy as np
 from resources.models import OERResource
-from resources.services.ai_utils import get_embedding_model
+from resources.services.ai_utils import get_embedding_model, get_vector_db_client
 
 logger = logging.getLogger(__name__)
 
 def _as_np(x) -> np.ndarray:
     """
     Safely convert input to a NumPy array.
-
     Handles:
     - PyTorch tensors
     - List of numbers or lists
@@ -33,7 +32,6 @@ def _as_np(x) -> np.ndarray:
     elif isinstance(x, np.ndarray):
         return x.astype(np.float32)
     elif isinstance(x, list):
-        # Convert nested lists recursively
         def _convert(item):
             if isinstance(item, list):
                 return [_convert(sub_item) for sub_item in item]
@@ -42,7 +40,6 @@ def _as_np(x) -> np.ndarray:
         converted = _convert(x)
         return np.array(converted, dtype=np.float32)
     else:
-        # Fallback for other types (e.g., scalars, sparse arrays)
         try:
             arr = np.asarray(x, dtype=np.float32)
             return arr
@@ -56,7 +53,6 @@ class BaseRetriever:
 class QdrantRetriever(BaseRetriever):
     """
     Qdrant-backed retriever using `qdrant-client`.
-
     Stores vectors in a Qdrant collection named `oer_resources` and keeps
     useful metadata as payload for quick retrieval.
     """
@@ -64,23 +60,19 @@ class QdrantRetriever(BaseRetriever):
     COLLECTION = os.environ.get('QDRANT_COLLECTION', 'oer_resources')
 
     def __init__(self, host: str | None = None, port: int = 6333):
+        from resources.services.ai_utils import get_vector_db_client
+        self.client = get_vector_db_client()
+        if self.client is None:
+            raise RuntimeError("VECTOR_BACKEND must be 'qdrant' for QdrantRetriever!")
         try:
-            from qdrant_client import QdrantClient  # type: ignore
-        except Exception as e:
-            raise RuntimeError("qdrant-client not installed") from e
-
-        host = host or os.environ.get('QDRANT_HOST', 'qdrant')
-        url = f"http://{host}:{port}"
-
-        try:
-            self.client = QdrantClient(url=url)
             _ = self.client.get_collections()
         except Exception as e:
-            raise RuntimeError(f"unable to connect to Qdrant at {url}: {e}") from e
+            raise RuntimeError(f"Unable to connect to Qdrant vector DB: {e}") from e
 
     def reindex(self, batch_size: int = 500):
         from qdrant_client.http import models as rest_models  # type: ignore
-
+        if self.client is None:
+            raise RuntimeError("QdrantRetriever was created without a client!")
         qs = OERResource.objects.filter(content_embedding__isnull=False)
         points = []
         for r in qs.iterator():
@@ -96,8 +88,8 @@ class QdrantRetriever(BaseRetriever):
             points.append(
                 rest_models.PointStruct(
                     id=int(getattr(r, 'pk', 0)),
-                    vector=vec.tolist(),  # Always store as list to Qdrant!
-                    payload=payload
+                    vector=vec.tolist(),
+                    payload=payload,
                 )
             )
             if len(points) >= batch_size:
@@ -106,41 +98,40 @@ class QdrantRetriever(BaseRetriever):
         if points:
             self.client.upsert(collection_name=self.COLLECTION, points=points)
 
-def get_similar_resources(self, query: str, k: int = 5):
-    try:
-        model = get_embedding_model()
-        q_emb = model.encode([query])[0]
-        q_vec = _as_np(q_emb)  # Always convert embedding to NumPy then to list
-        if q_vec is None:
+    def get_similar_resources(self, query: str, k: int = 5):
+        if self.client is None:
+            raise RuntimeError("QdrantRetriever was created without a client!")
+        try:
+            model = get_embedding_model()
+            q_emb = model.encode([query])[0]
+            q_vec = _as_np(q_emb)
+            if q_vec is None:
+                return []
+
+            hits = self.client.search(
+                collection_name=self.COLLECTION,
+                query_vector=q_vec.tolist(),
+                limit=k
+            )
+
+            results = []
+            ids = [int(h.id) for h in hits]
+            resources = {r.pk: r for r in OERResource.objects.filter(pk__in=ids)}
+            for h in hits:
+                r = resources.get(int(h.id))
+                score = float(h.score) if hasattr(h, 'score') else 0.0
+                if r:
+                    results.append((r, score))
+            return results
+        except Exception as e:
+            logger.error(f"Qdrant search error: {e}")
             return []
-
-        # FIX: Use 'search' for points query
-        hits = self.client.search(
-            collection_name=self.COLLECTION,
-            query_vector=q_vec.tolist(),
-            limit=k
-        )
-
-        results = []
-        ids = [int(h.id) for h in hits]
-        resources = {r.pk: r for r in OERResource.objects.filter(pk__in=ids)}
-        for h in hits:
-            r = resources.get(int(h.id))
-            score = float(h.score) if hasattr(h, 'score') else 0.0
-            if r:
-                results.append((r, score))
-        return results
-    except Exception as e:
-        logger.error(f"Qdrant search error: {e}")
-        return []
 
 class NumpyInMemoryRetriever(BaseRetriever):
     """
     Fallback retriever that loads db vectors into memory and does linear scan.
-
     Suitable for small datasets and demos only.
     """
-
     def __init__(self):
         self.embedding_model = None
         self.index = []
@@ -193,7 +184,8 @@ class NumpyInMemoryRetriever(BaseRetriever):
         return scores[:k]
 
 def get_retriever(preferred: str = 'qdrant') -> BaseRetriever:
-    """Factory that returns a retriever. Tries preferred backend, falls back.
+    """
+    Factory that returns a retriever. Tries preferred backend, falls back.
 
     preferred: 'qdrant' or 'numpy'
     """

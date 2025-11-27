@@ -1,23 +1,41 @@
+# --- CORE DJANGO PLATFORM ---
 Django==5.2.1
-djangorestframework
-langchain
+djangorestframework>=3.14
+
+# --- ASYNC TASKS & CACHING ---
+celery[redis]>=5.2
+redis>=5.0
+
+# --- DATABASE & VECTOR SEARCH ---
+psycopg2-binary>=2.9     # PostgreSQL adapter (mandatory)
+pgvector>=0.2.0          # Vector operations in Postgres (AI search)
+qdrant-client>=1.8.0     # Qdrant integration (optional, but recommended for scalable search)
+
+# --- AI/ML & NLP ---
+sentence-transformers==3.0.0   # Pin to version you tested with
+transformers>=4.38.0           # If using custom HF models
+torch>=2.0                     # Needed for transformers/sentence-transformers
+numpy>=1.24
+pandas>=2.0     # (Optional, for CSV processing/export)
+tqdm            # Nice-to-have for progress bars in scripts/tasks
+
+# --- LANGCHAIN AND RAG ---
+langchain>=0.1.0
 langchain-community
 langchain-huggingface
-chromadb
-sentence-transformers==3.0.0
-transformers
-torch
-celery[redis]
-redis
-pgvector
-psycopg2-binary
-numpy
-pandas
-tqdm
-django-environ
-requests
-coreschema
-django-crispy-forms
-django-crispy-forms
-pymarc
-qdrant-client>=1.8.0
+chromadb>=0.4.0           # If doing in-memory/local embedding experiments
+
+# --- DJANGO ENHANCEMENTS & UTILS ---
+django-environ>=0.11         # Load .env files for config
+django-crispy-forms>=2.0     # Improved form rendering
+coreschema                   # DRF API docs (optional)
+requests>=2.31.0             # Safe, up-to-date HTTP requests
+
+# --- OER/MARCXML/CSV --
+pymarc>=5.0.0                # MARCXML/metadata support
+
+# --- DEVELOPMENT / OPTIONAL ---
+# pytest, ipython, black, etc can be in a requirements-dev.txt or a [dev] extra
+
+# Pin any other specialized libs below as needed for your ingest/export/AI routines
+

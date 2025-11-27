@@ -55,43 +55,19 @@ def ai_search(request):
                     'query': query,
                     'ai_search': True
                 })
-
             from .services.search_engine import OERSearchEngine
             engine = OERSearchEngine()
             detailed = engine.hybrid_search(query, limit=20)
 
-            results = []
-            serializable = []
-            for r in detailed:
-                try:
-                    pct = int(r.final_score * 100)
-                except Exception:
-                    pct = 0
-                resource_obj = r.resource
-                results.append((resource_obj, pct))
-                serializable.append({
-                    'id': getattr(resource_obj, 'id', None),
-                    'title': getattr(resource_obj, 'title', ''),
-                    'url': getattr(resource_obj, 'url', ''),
-                    'final_score': float(r.final_score),
-                    'match_reason': r.match_reason,
-                    'source': getattr(getattr(resource_obj, 'source', None), 'name', '')
-                })
-
-            try:
-                request.session['last_search_results'] = serializable
-            except Exception:
-                pass
-
+            # This is now your main result structure
             return render(request, TEMPLATE_SEARCH, {
-                'results': results,
                 'detailed_results': detailed,
                 'query': query,
                 'ai_search': True
             })
 
         return render(request, TEMPLATE_SEARCH, {
-            'results': [],
+            'detailed_results': [],
             'query': '',
             'ai_search': True
         })
@@ -99,6 +75,7 @@ def ai_search(request):
         logger.error(f"Error in ai_search: {str(e)}")
         messages.error(request, "An error occurred during the search.")
         return redirect('resources:ai_search')
+
 
 def compare_view(request):
     """View for comparing multiple OER resources"""

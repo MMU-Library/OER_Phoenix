@@ -1,12 +1,9 @@
-# Python
+# Python specific
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
 build/
 develop-eggs/
 dist/
@@ -19,44 +16,36 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Django
+# Virtual environments
+venv/
+ENV/
+env/
+
+# Django specific
 *.log
-local_settings.py
 db.sqlite3
-db.sqlite3-journal
-/media
-/staticfiles
-/static
+*.sqlite3
+media/
+staticfiles/
 
-# Environment
+# Celery / runtime
+celerybeat-schedule
+
+# Docker specific
+docker-compose.override.yml
 .env
-.venv
 
-# IDE
+# Continue / editor metadata
+.continue/
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
+*.code-workspace
 
-# OS
+# Local development
+*.env.local
+tmp/
+
+# OS / misc
 .DS_Store
 Thumbs.db
-
-# Docker
-postgres_data/
-
-# AI Models
-*.bin
-*.pt
-*.pth
-chroma_db/
-
-
-#old/reference files
-contextonly-notinproject/
-continue/
