@@ -8,6 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db import models
 from .harvesters.preset_configs import PRESET_CONFIGS
 import csv
 import io
@@ -16,7 +17,7 @@ import logging
 
 from .models import OERResource, OERSource, HarvestJob, TalisPushJob
 from .forms import (
-    CSVUploadForm, ExportForm, APIHarvesterForm, OAIPMHHarvesterForm, 
+    CSVUploadForm, ExportForm, APIHarvesterForm, OAIPMHHarvesterForm,
     CSVHarvesterForm, TalisExportForm, HarvesterTypeForm
 )
 from .harvesters.api_harvester import APIHarvester
@@ -24,10 +25,21 @@ from .harvesters.oaipmh_harvester import OAIPMHHarvester
 from .harvesters.csv_harvester import CSVHarvester
 from .harvesters.preset_configs import PresetAPIConfigs, PresetOAIPMHConfigs
 
+# NEW: Talis import/analysis helpers for dashboard workflows
+from resources.services.talis import (
+    parse_csv_to_talis_list,
+    fetch_list_from_url,
+    TalisList,
+    TalisItem,
+)
+from resources.services.talis_analysis import analyse_talis_list
+
 logger = logging.getLogger(__name__)
+
 
 def staff_required(view_func):
     return user_passes_test(lambda u: u.is_staff)(view_func)
+
 
 # Template path constants for consistency
 TEMPLATE_ADMIN_HOME = 'admin/resources/home.html'
@@ -43,6 +55,259 @@ TEMPLATE_EXPORT_DATA = 'admin/resources/export.html'
 TEMPLATE_CREATE_SOURCE = 'admin/resources/create_source.html'
 TEMPLATE_ADD_HARVESTER = 'admin/resources/add_harvester.html'
 TEMPLATE_OERSOURCE_HARVEST = 'admin/resources/oersource_harvest.html'
+
+# NEW: session keys for dashboard Talis analysis
+TALIS_SESSION_KEY = "dashboard_talis_list"
+TALIS_SUMMARY_KEY = "dashboard_talis_summary"
+TALIS_ITEMS_KEY = "dashboard_talis_item_analyses"
+
+
+# ----------------------------------------------------------------------
+# NEW: Dashboard + Talis list A/B workflows
+# ----------------------------------------------------------------------
+
+def dashboard_view(request):
+    """
+    Librarian-facing landing page.
+
+    Shows:
+    - AI search hero (form posts to ai_search).
+    - Talis Reading List analysis widget (CSV + URL, posts to talis_list_analyse_view).
+    - Quick stats: recent resources, top subjects, resource type breakdown, sources.
+    """
+    try:
+        recent_resources = OERResource.objects.filter(is_active=True).order_by("-created_at")[:10]
+
+        top_subjects = (
+            OERResource.objects.filter(is_active=True)
+            .exclude(subject="")
+            .values("subject")
+            .annotate(count=models.Count("id"))
+            .order_by("-count")[:15]
+        )
+
+        type_counts = (
+            OERResource.objects.filter(is_active=True)
+            .values("resource_type")
+            .annotate(count=models.Count("id"))
+            .order_by()
+        )
+
+        sources = (
+            OERSource.objects.filter(is_active=True)
+            .values("name")
+            .annotate(count=models.Count("resources"))
+            .order_by("-count")[:10]
+        )
+
+        context = {
+            "recent_resources": recent_resources,
+            "top_subjects": top_subjects,
+            "type_counts": list(type_counts),
+            "sources": list(sources),
+        }
+        return render(request, "resources/dashboard.html", context)
+    except Exception as e:
+        logger.error(f"Error in dashboard_view: {str(e)}")
+        messages.error(request, "An error occurred while loading the dashboard.")
+        return redirect('resources:home')
+
+
+def talis_list_analyse_view(request):
+    """
+    Dashboard-initiated Talis list analysis entry:
+
+    - If 'talis_csv' is present in FILES, use CSV workflow (A).
+    - Else if 'talis_url' in POST, use URL/API workflow (B).
+
+    Stores a normalised TalisList in session and redirects to preview.
+    """
+    try:
+        if request.method == "POST":
+            talis_list = None
+
+            if "talis_csv" in request.FILES:
+                talis_list = parse_csv_to_talis_list(request.FILES["talis_csv"])
+            else:
+                talis_url = request.POST.get("talis_url", "").strip()
+                if talis_url:
+                    talis_list = fetch_list_from_url(talis_url)
+
+            if talis_list:
+                _store_talis_list_in_session(request, talis_list)
+                return redirect('resources:talis_preview_dashboard')
+
+        # GET or invalid POST: show a generic form page (can share template)
+        return render(request, "resources/talis_jobs.html", {})
+    except Exception as e:
+        logger.error(f"Error in talis_list_analyse_view: {str(e)}")
+        messages.error(request, "An error occurred while preparing the Talis analysis.")
+        return redirect('resources:dashboard')
+
+
+def talis_list_preview_view(request):
+    """
+    Preview of parsed Talis list items before running AI analysis (dashboard flow).
+    """
+    try:
+        talis_list = _load_talis_list_from_session(request)
+        if not talis_list:
+            messages.warning(request, "No Talis list in session. Please start again.")
+            return redirect('resources:talis_analyse_dashboard')
+
+        if request.method == "POST":
+            analysis_result = analyse_talis_list(talis_list)
+            _store_analysis_in_session(request, analysis_result)
+            return redirect('resources:talis_report_dashboard')
+
+        context = {
+            "talis_list": talis_list,
+            "items": talis_list.items,
+        }
+        return render(request, "resources/talis_preview.html", context)
+    except Exception as e:
+        logger.error(f"Error in talis_list_preview_view: {str(e)}")
+        messages.error(request, "An error occurred while previewing the Talis list.")
+        return redirect('resources:dashboard')
+
+
+def talis_list_report_view(request):
+    """
+    OER coverage report for the last analysed Talis list (dashboard flow).
+    """
+    try:
+        talis_list = _load_talis_list_from_session(request)
+        if not talis_list:
+            messages.warning(request, "No Talis analysis found in session.")
+            return redirect('resources:talis_analyse_dashboard')
+
+        summary = request.session.get(TALIS_SUMMARY_KEY)
+        item_analyses = request.session.get(TALIS_ITEMS_KEY, [])
+
+        context = {
+            "talis_list": talis_list,
+            "summary": summary,
+            "item_analyses": item_analyses,
+        }
+        return render(request, "resources/talis_report.html", context)
+    except Exception as e:
+        logger.error(f"Error in talis_list_report_view: {str(e)}")
+        messages.error(request, "An error occurred while loading the Talis report.")
+        return redirect('resources:dashboard')
+
+
+def _store_talis_list_in_session(request, talis_list: TalisList) -> None:
+    request.session[TALIS_SESSION_KEY] = {
+        "identifier": talis_list.identifier,
+        "title": talis_list.title,
+        "module_code": talis_list.module_code,
+        "academic_year": talis_list.academic_year,
+        "source_type": talis_list.source_type,
+        "items": [
+            {
+                "position": i.position,
+                "section": i.section,
+                "importance": i.importance,
+                "item_type": i.item_type,
+                "title": i.title,
+                "authors": i.authors,
+                "isbn": i.isbn,
+                "doi": i.doi,
+                "url": i.url,
+                "notes": i.notes,
+            }
+            for i in talis_list.items
+        ],
+    }
+
+
+def _load_talis_list_from_session(request) -> TalisList | None:
+    data = request.session.get(TALIS_SESSION_KEY)
+    if not data:
+        return None
+
+    items: list[TalisItem] = []
+    for row in data.get("items", []):
+        items.append(
+            TalisItem(
+                position=row["position"],
+                section=row.get("section"),
+                importance=row.get("importance"),
+                item_type=row.get("item_type"),
+                title=row["title"],
+                authors=row.get("authors"),
+                isbn=row.get("isbn"),
+                doi=row.get("doi"),
+                url=row.get("url"),
+                notes=row.get("notes"),
+            )
+        )
+
+    return TalisList(
+        identifier=data.get("identifier", "session_list"),
+        title=data.get("title"),
+        module_code=data.get("module_code"),
+        academic_year=data.get("academic_year"),
+        source_type=data.get("source_type", "unknown"),
+        items=items,
+    )
+
+
+def _store_analysis_in_session(request, analysis_result) -> None:
+    # Dashboard summary + analyses
+    request.session[TALIS_SUMMARY_KEY] = {
+        "total_items": analysis_result.summary.total_items,
+        "items_with_matches": analysis_result.summary.items_with_matches,
+        "coverage_percentage": analysis_result.summary.coverage_percentage,
+        "breakdown_by_type": analysis_result.summary.breakdown_by_type,
+    }
+    item_analyses_payload = [
+        {
+            "item": {
+                "position": ia.item.position,
+                "section": ia.item.section,
+                "importance": ia.item.importance,
+                "item_type": ia.item.item_type,
+                "title": ia.item.title,
+                "authors": ia.item.authors,
+                "isbn": ia.item.isbn,
+                "doi": ia.item.doi,
+                "url": ia.item.url,
+                "notes": ia.item.notes,
+            },
+            "coverage_label": ia.coverage_label,
+            "results": [
+                {
+                    "id": getattr(r.resource, "id", None),
+                    "title": getattr(r.resource, "title", ""),
+                    "url": getattr(r.resource, "url", ""),
+                    "final_score": float(r.final_score),
+                    "match_reason": r.match_reason,
+                    "source": getattr(r.resource.source, "name", ""),
+                }
+                for r in ia.results
+            ],
+        }
+        for ia in analysis_result.item_analyses
+    ]
+    request.session[TALIS_ITEMS_KEY] = item_analyses_payload
+
+    # Legacy-style report for talis_report_download
+    legacy_report = []
+    for entry in item_analyses_payload:
+        item = entry["item"]
+        matches = entry["results"]
+        legacy_report.append({
+            "original": {
+                "title": item["title"],
+                "author": item["authors"],
+                "note": item["notes"],
+            },
+            "matches": matches,
+        })
+    request.session["talis_report"] = legacy_report
+
+
 
 # Search Views
 def ai_search(request):
@@ -82,7 +347,7 @@ def compare_view(request):
     try:
         resource_ids = request.session.get('comparison_resources', [])
         resources = OERResource.objects.filter(id__in=resource_ids) if resource_ids else []
-        
+
         return render(request, TEMPLATE_COMPARE, {
             'resources': resources
         })
@@ -90,6 +355,7 @@ def compare_view(request):
         logger.error(f"Error in compare_view: {str(e)}")
         messages.error(request, "An error occurred while loading the comparison view.")
         return redirect('resources:home')
+
 
 # Home View - Use the existing template
 def home(request):

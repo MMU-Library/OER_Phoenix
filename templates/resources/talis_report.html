@@ -1,22 +1,110 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block title %}Talis AI Report{% endblock %}
+
 {% block content %}
 <h1>AI Matching Report</h1>
-<p>Download the report as CSV: <a href="{% url 'resources:talis_report_download' %}">Download CSV</a></p>
-<form method="post" action="{% url 'resources:talis_push' %}">
-  {% csrf_token %}
-  <button type="submit" class="btn btn-success mb-3">Push report to Talis</button>
-</form>
-{% for item in report %}
-  <div class="card mb-3">
-    <div class="card-header">
-      <strong>Original:</strong> {{ item.original.title }} {% if item.original.author %} — {{ item.original.author }}{% endif %}
-    </div>
-    <div class="card-body">
-      {% if item.matches %}
-        <table class="table">
-          <thead><tr><th>Rank</th><th>Title</th><th>Score</th><th>Source</th><th>Link</th></tr></thead>
-          <tbody>
+
+{# Dashboard-style analysis (summary + item_analyses) #}
+{% if summary and item_analyses %}
+  {% if talis_list %}
+    <p>
+      <strong>List:</strong> {{ talis_list.title|default:"(Untitled list)" }}<br>
+      {% if talis_list.module_code %}<strong>Module:</strong> {{ talis_list.module_code }}<br>{% endif %}
+      {% if talis_list.academic_year %}<strong>Academic year:</strong> {{ talis_list.academic_year }}{% endif %}
+    </p>
+  {% endif %}
+
+  <h2>Coverage summary</h2>
+  <ul>
+    <li>Total items: {{ summary.total_items }}</li>
+    <li>Items with matches: {{ summary.items_with_matches }}</li>
+    <li>Coverage: {{ summary.coverage_percentage|floatformat:1 }}%</li>
+  </ul>
+
+  {% if summary.breakdown_by_type %}
+    <h3>Matches by resource type</h3>
+    <ul>
+      {% for r_type, count in summary.breakdown_by_type.items %}
+        <li>{{ r_type|default:"(unspecified)" }}: {{ count }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h2>Per-item matches</h2>
+
+  {% for entry in item_analyses %}
+    {% with item=entry.item results=entry.results %}
+      <div class="mb-4">
+        <h4>
+          {{ item.position }}. {{ item.title }}
+          {% if item.authors %}<small>— {{ item.authors }}</small>{% endif %}
+        </h4>
+        <p>
+          {% if item.section %}<strong>Section:</strong> {{ item.section }} &nbsp; {% endif %}
+          {% if item.importance %}<strong>Importance:</strong> {{ item.importance }} &nbsp; {% endif %}
+          {% if item.item_type %}<strong>Type:</strong> {{ item.item_type }}{% endif %}
+        </p>
+
+        {% if results %}
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Title</th>
+                <th>Score</th>
+                <th>Source</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in results %}
+                <tr>
+                  <td>{{ forloop.counter }}</td>
+                  <td>{{ m.title }}</td>
+                  <td>{{ m.final_score|floatformat:3 }}</td>
+                  <td>{{ m.source }}</td>
+                  <td>{% if m.url %}<a href="{{ m.url }}" target="_blank">Open</a>{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p><em>No OER matches found for this item.</em></p>
+        {% endif %}
+      </div>
+    {% endwith %}
+  {% endfor %}
+
+  <a href="{% url 'resources:talis_report_download' %}" class="btn btn-outline-secondary">
+    Download CSV report
+  </a>
+  <a href="{% url 'resources:dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+
+{# Legacy CSV-based report from process_talis_csv #}
+{% elif report %}
+  <p>
+    Download the report as CSV:
+    <a href="{% url 'resources:talis_report_download' %}">Download CSV</a>
+  </p>
+
+  {% for item in report %}
+    <h4>
+      Original: {{ item.original.title }}
+      {% if item.original.author %} — {{ item.original.author }}{% endif %}
+    </h4>
+
+    {% if item.matches %}
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Title</th>
+            <th>Score</th>
+            <th>Source</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody>
           {% for m in item.matches %}
             <tr>
               <td>{{ forloop.counter }}</td>
@@ -26,12 +114,14 @@
               <td>{% if m.url %}<a href="{{ m.url }}" target="_blank">Open</a>{% endif %}</td>
             </tr>
           {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <div class="alert alert-warning">No matches found for this item.</div>
-      {% endif %}
-    </div>
-  </div>
-{% endfor %}
-{% endblock %}
+        </tbody>
+      </table>
+    {% else %}
+      <p><em>No matches found for this item.</em></p>
+    {% endif %}
+  {% endfor %}
+{% else %}
+  <p>No report data available.</p>
+  <a href="{% url 'resources:dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+{% endif %}
+

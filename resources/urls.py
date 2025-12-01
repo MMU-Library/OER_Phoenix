@@ -5,9 +5,17 @@ from . import api
 app_name = 'resources'
 
 urlpatterns = [
-    # Home page - use the resources home template
-    path('', views.home, name='home'),
-    
+    # Make dashboard the home page
+    path('', views.dashboard_view, name='dashboard'),
+
+    # Old home page (to be deprecated)
+    path('home/', views.home, name='home'),
+
+    # NEW: Talis A/B analysis flow driven from dashboard
+    path('talis/analyse/', views.talis_list_analyse_view, name='talis_analyse_dashboard'),
+    path('talis/preview/dashboard/', views.talis_list_preview_view, name='talis_preview_dashboard'),
+    path('talis/report/dashboard/', views.talis_list_report_view, name='talis_report_dashboard'),
+
     # Search and comparison - use resources templates
     path('search/', views.ai_search, name='ai_search'),
     path('compare/', views.compare_view, name='compare_resources'),
@@ -26,25 +34,29 @@ urlpatterns = [
     path('export/talis/preview/', views.talis_preview, name='talis_preview'),
     path('export/success/', views.export_success, name='export_success'),
     path('export-data/', views.export_data, name='export_data'),  # Admin template
-    
+
     # OER Source management (admin functions) - Admin templates
     path('harvest/<int:source_id>/', views.harvest_view, name='harvest_oer_source'),
     path('test-connection/<int:source_id>/', views.test_connection_view, name='test_oer_source_connection'),
     path('apply-preset/', views.apply_preset_view, name='apply_preset'),
-    
+
     # Dynamic form handling - Admin templates
     path('create-source/', views.create_source, name='create_source'),
     path('load-configuration-form/', views.load_configuration_form, name='load_configuration_form'),
+
     # API endpoints
     path('api/search/', api.SearchAPIView.as_view(), name='api_search'),
+
     # Simple frontend consumer for the API
     path('search/consumer/', views.search_consumer, name='search_consumer'),
-    # Talis CSV processing (batch AI search)
+
+    # Existing Talis CSV processing (batch AI search)
     path('talis/upload/', views.bulk_csv_upload, name='talis_csv_upload'),
     path('talis/process/', views.process_talis_csv, name='talis_process_csv'),
     path('talis/report/download/', views.talis_report_download, name='talis_report_download'),
     path('talis/push/', views.talis_push, name='talis_push'),
     path('search/export/talis/', views.search_export_talis, name='search_export_talis'),
+
     # Admin/demo: list recent Talis push jobs
     path('talis/jobs/', views.talis_jobs, name='talis_jobs'),
 ]

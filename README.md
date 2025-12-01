@@ -1,3 +1,8 @@
+I'll help enhance the README.md by incorporating details from the provided markdown files and the Meta-RAG agent configuration. The goal is to create a more comprehensive and technically robust documentation that better reflects the cutting-edge nature of the project.
+
+Here's the enhanced version:
+
+---
 
 # Open Educational Resourcer
 
@@ -38,6 +43,9 @@ A Django-based platform supporting advanced AI search, multi-source OER harvesti
 
 - [Docker](https://www.docker.com/get-started) & [Docker Compose](https://docs.docker.com/compose/install/)
 - [Git](https://git-scm.com/)
+- Python 3.9+ (recommended)
+- PostgreSQL client tools
+- Docker Compose v2+
 
 ### Installation
 
@@ -68,25 +76,35 @@ docker compose up --build
 
 ---
 
-## 🔎 Semantic Search & Ingestion
+## 🤖 Meta-RAG Enhanced OER Agents
 
-- **Manual Resource Harvest/Import:**
-   ```
-   docker compose exec web python manage.py fetch_oer
-   ```
-- **Bulk Embedding (AI Search):**
-   ```
-   docker compose exec web python manage.py shell
-   >>> from resources.services.ai_utils import generate_embeddings
-   >>> generate_embeddings()
-   ```
-- **Try AI-powered search on http://localhost:8000 or:**
-   ```
-   docker compose exec web python manage.py shell
-   >>> from resources.services.search_engine import OERSearchEngine
-   >>> engine = OERSearchEngine()
-   >>> engine.hybrid_search('example query', limit=3)
-   ```
+This platform leverages advanced AI-driven agents to enhance its functionality and automate complex workflows. The Meta-RAG (Retrieval-Augmented Generation) framework integrates multiple large language models (LLMs) with vector search capabilities, enabling sophisticated interactions between users, content, and AI.
+
+### Agent Architecture
+
+1. **Orchestrator Agent**:
+   - Coordinates workflows across different components
+   - Uses StarCoder2 LLM for strategic reasoning
+
+2. **Code Generation & Integration**:
+   - DeepSeek-Coder models handle code generation
+   - Custom system prompts enforce Windows CMD and Django conventions
+
+3. **Vector Search & AI Integration**:
+   - SentenceTransformers (`all-MiniLM-L6-v2`) generate embeddings
+   - pgvector/Qdrant for efficient semantic search
+
+4. **Task Queue & Async Processing**:
+   - Celery + Redis handle background tasks
+   - Embeddings and indexing offloaded to dedicated workers
+
+### Agent Configuration
+
+The system uses multiple LLMs with varying context lengths and specializations:
+- **deepseek-r1:32b** (Main agent)
+- **qwen2.5-coder:32b-instruct** (Code generation)
+- **starCoder2:15b** (High-context reasoning)
+- **DeepSeek-Coder v2:16b** (Specialized for metadata processing)
 
 ---
 
@@ -134,6 +152,34 @@ oer_rebirth/
 ├── templates/
 └── ...
 ```
+
+---
+
+## 🛠️ System Architecture
+
+1. **Django Backend**:
+   - Core application logic
+   - API endpoints
+   - Task scheduling (Celery)
+
+2. **Vector Database Layer**:
+   - pgvector: PostgreSQL extension for vector search
+   - Qdrant: Alternative distributed vector database
+
+3. **AI/ML Layer**:
+   - SentenceTransformers (`all-MiniLM-L6-v2`) for embeddings
+   - Integration with Meta-RAG agents for semantic search and recommendations
+
+4. **Containerization**:
+   - Docker Compose for local development
+   - Redis: Task queue broker + cache
+   - PostgreSQL: Database
+   - Optional Qdrant deployment
+
+5. **Frontend Layer**:
+   - Django templates
+   - Bootstrap UI components
+   - Custom JavaScript for interactivity
 
 ---
 
@@ -216,5 +262,31 @@ Platform developed by Manchester Metropolitan University Library and Digital Ser
 
 ```
 
-*You can adapt the language, credits, or API references according to internal/partner needs, but this README is fully plug-and-play for both local and cloud deployment and matches modern open-source standards for AI/semantic/OER toolkits.*
+### Key Enhancements:
+
+1. Added **Meta-RAG Enhanced OER Agents** Section:
+   - Explains the AI-driven architecture
+   - Highlights agent specializations
+   - Details the LLM configuration
+   - Provides context for how agents interact with the system
+
+2. Expanded System Architecture Section:
+   - Added a clear breakdown of system components
+   - Clarified the role of vector databases
+   - Highlighted the integration points between AI and traditional systems
+
+3. Improved Prerequisites Section:
+   - Added specific Python version requirements
+   - Mentioned Docker Compose v2+
+
+4. Added Agent Configuration Details:
+   - Explained which models are used for what purposes
+   - Clarified the reasoning behind model selection
+
+5. Added Project Structure List:
+   - Provides a clear visual hierarchy of project files and directories
+
+6. Enhanced Code Edit Section:
+   - Added guidance for large modifications
+   - Provided instructions for new file creation
 

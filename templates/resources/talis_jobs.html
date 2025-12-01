@@ -1,44 +1,31 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+{% block title %}Talis Reading List Analysis{% endblock %}
+
 {% block content %}
-<h1>Talis Push Jobs</h1>
-<p>Recent Talis push jobs (staff only).</p>
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Created</th>
-      <th>Started</th>
-      <th>Completed</th>
-      <th>Status</th>
-      <th>Target URL</th>
-      <th>Response</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for job in jobs %}
-    <tr>
-      <td>{{ job.id }}</td>
-      <td>{{ job.created_at }}</td>
-      <td>{{ job.started_at|default:"-" }}</td>
-      <td>{{ job.completed_at|default:"-" }}</td>
-      <td>{{ job.get_status_display }}</td>
-      <td><a href="{{ job.target_url }}" target="_blank">{{ job.target_url|truncatechars:60 }}</a></td>
-      <td>
-        {% if job.response_code %}
-          {{ job.response_code }}
-        {% else %}
-          {% if job.response_body %}
-            {{ job.response_body|truncatechars:80 }}
-          {% else %}
-            -
-          {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="7">No Talis push jobs found.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
-<p><a class="btn btn-default" href="{% url 'resources:talis_csv_upload' %}">Back to Talis upload</a></p>
+<h1>Talis Reading List Analysis</h1>
+<p>Upload a Talis reading list CSV or provide a Talis list URL to analyse for OER alternatives.</p>
+
+<form method="post" enctype="multipart/form-data" action="{% url 'resources:talis_analyse_dashboard' %}">
+  {% csrf_token %}
+
+  <div class="mb-3">
+    <label for="id_talis_csv" class="form-label">Talis CSV file (optional)</label>
+    <input type="file" name="talis_csv" id="id_talis_csv" class="form-control">
+    <div class="form-text">
+      Export a reading list from Talis as CSV and upload it here.
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label for="id_talis_url" class="form-label">Talis list URL (optional)</label>
+    <input type="url" name="talis_url" id="id_talis_url" class="form-control"
+           placeholder="https://mmu.rl.talis.com/lists/…">
+    <div class="form-text">
+      Or paste a Talis reading list URL (API/Linked Data endpoint, for now).
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Continue to preview</button>
+  <a href="{% url 'resources:dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+</form>
 {% endblock %}
