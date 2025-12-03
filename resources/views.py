@@ -595,6 +595,35 @@ def get_form_class(source_type):
     return form_classes.get(source_type)
 
 @staff_required
+def generate_missing_embeddings(request):
+    """
+    Staff-only view to trigger embedding generation for all resources missing embeddings.
+    """
+    try:
+        from resources.services import ai_utils
+        
+        # Count resources needing embeddings
+        resources_needing = OERResource.objects.filter(content_embedding__isnull=True).count()
+        
+        if resources_needing == 0:
+            messages.info(request, "All resources already have embeddings.")
+            return redirect('resources:dashboard')
+        
+        # Trigger generation
+        ai_utils.generate_embeddings()
+        
+        messages.success(
+            request,
+            f"Embedding generation triggered for {resources_needing} resources. This may take several minutes."
+        )
+    except Exception as e:
+        logger.error(f"Error triggering embedding generation: {str(e)}")
+        messages.error(request, f"Failed to trigger embedding generation: {str(e)}")
+    
+    return redirect('resources:dashboard')
+
+
+@staff_required
 @require_http_methods(['GET'])
 def load_configuration_form(request):
     """Load configuration form based on source type"""

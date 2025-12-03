@@ -1,292 +1,204 @@
-I'll help enhance the README.md by incorporating details from the provided markdown files and the Meta-RAG agent configuration. The goal is to create a more comprehensive and technically robust documentation that better reflects the cutting-edge nature of the project.
-
-Here's the enhanced version:
 
 ---
 
-# Open Educational Resourcer
+# OER_Rebirth  
+Open Educational Resources Discovery & Analysis Platform for Academic Libraries  
 
-**AI-Powered Semantic Search Platform for OER**
-
-A Django-based platform supporting advanced AI search, multi-source OER harvesting, vector search via pgvector/Qdrant, and Talis reading list export. Containerized for quick deployment with Docker, with async pipelines via Celery + Redis.
-
----
-
-## 🚀 Core Architecture
-
-- **Backend:** Django 5.x
-- **Database:** PostgreSQL 14+ (with pgvector)
-- **AI/ML:** HuggingFace/SentenceTransformers (`all-MiniLM-L6-v2`)
-- **Vector Search:** pgvector (default), Qdrant optional
-- **Task Queue:** Celery + Redis (async processing)
-- **Containerization:** Docker Compose
-- **Frontend:** Django templates + Bootstrap
+A Django-based digital library system designed for UK academic subject librarians to discover OER and analyse Talis Aspire reading lists for open alternatives. Built for Manchester Metropolitan University Library Services.
 
 ---
 
-## ✨ Features
-
-- 🔍 **AI-Powered Semantic Search**: Find resources with natural language queries
-- 📚 **OER Harvesting**: Automated ingestion from OER Commons, OpenStax, MARCXML, or CSV
-- 🎯 **Vector Similarity Search**: Semantic relevance via pgvector/Qdrant
-- 📤 **Talis Reading List Export**: Send collections to Talis Aspire
-- 📊 **Admin Dashboard**: Manage sources, mappings, and ingest jobs
-- 🔄 **Async Task Processing**: Embeddings/indexing offloaded to Celery
-- 🗃 **Batch Upload**: Import resources in bulk from CSV
-- 📝 **Extensible API**: Designed for easy integration
+## Overview  
+OER_Rebirth aggregates open educational resources from multiple providers (OAPEN, DOAB, OER Commons, OpenStax) and provides:  
+- **AI-powered semantic search** using sentence-transformers (all-MiniLM-L6-v2) with pgvector  
+- **Talis Aspire reading list analysis**: upload CSV or link to a Talis list to find OER alternatives for each item  
+- **Dashboard interface** for librarians with resource statistics, subject breakdowns, and maintenance tools  
+- **Multi-source harvesting** via OAI-PMH, REST APIs, CSV, and MARCXML  
+- **Self-hosted and open source**: Docker-based deployment, no vendor lock-in  
 
 ---
 
-## 🟢 Quick Start
+## Key Features  
 
-### Prerequisites
+### For Subject Librarians
+- Dashboard landing page with AI search, Talis analysis widget, and resource statistics  
+- Reading list coverage analysis: upload a Talis CSV export or paste a list URL to identify open alternatives for proprietary items  
+- Semantic search: find OER by topic, learning outcome, or natural language query  
+- Collection building: save analysis results and export back to Talis  
 
-- [Docker](https://www.docker.com/get-started) & [Docker Compose](https://docs.docker.com/compose/install/)
-- [Git](https://git-scm.com/)
-- Python 3.9+ (recommended)
-- PostgreSQL client tools
-- Docker Compose v2+
-
-### Installation
-
-Clone and start:
-```
-git clone https://github.com/MMU-Library/oer_rebirth.git
-cd oer_rebirth
-cp .env.example .env      # Edit secrets and config values as needed
-docker compose up --build
-```
-
-**Access:**
-- Web interface: http://localhost:8000
-- Admin panel: http://localhost:8000/admin
+### For Administrators
+- Unified source management: configure API, OAI-PMH, CSV, and MARCXML harvesters via admin interface  
+- Automated harvesting: scheduled background jobs with status tracking and error logging  
+- Embedding generation: batch or selective AI embedding creation for semantic search  
+- Quality scoring: built-in metrics for resource assessment  
 
 ---
 
-### First Run Setup
+## Architecture  
 
-1. **Create admin user:**
-   ```
-   docker compose exec web python manage.py createsuperuser
-   ```
-2. **Run migrations:**
-   ```
-   docker compose exec web python manage.py migrate
-   ```
+### Technology Stack
+- **Backend**: Django 5.x, Python 3.12  
+- **Database**: PostgreSQL 16 with pgvector extension  
+- **Search**: SentenceTransformers (all-MiniLM-L6-v2), cosine similarity  
+- **Containerization**: Docker Compose  
+- **Frontend**: Bootstrap 5, Chart.js  
+- **APIs**: OAI-PMH, REST, Talis Aspire integration  
 
----
-
-## 🤖 Meta-RAG Enhanced OER Agents
-
-This platform leverages advanced AI-driven agents to enhance its functionality and automate complex workflows. The Meta-RAG (Retrieval-Augmented Generation) framework integrates multiple large language models (LLMs) with vector search capabilities, enabling sophisticated interactions between users, content, and AI.
-
-### Agent Architecture
-
-1. **Orchestrator Agent**:
-   - Coordinates workflows across different components
-   - Uses StarCoder2 LLM for strategic reasoning
-
-2. **Code Generation & Integration**:
-   - DeepSeek-Coder models handle code generation
-   - Custom system prompts enforce Windows CMD and Django conventions
-
-3. **Vector Search & AI Integration**:
-   - SentenceTransformers (`all-MiniLM-L6-v2`) generate embeddings
-   - pgvector/Qdrant for efficient semantic search
-
-4. **Task Queue & Async Processing**:
-   - Celery + Redis handle background tasks
-   - Embeddings and indexing offloaded to dedicated workers
-
-### Agent Configuration
-
-The system uses multiple LLMs with varying context lengths and specializations:
-- **deepseek-r1:32b** (Main agent)
-- **qwen2.5-coder:32b-instruct** (Code generation)
-- **starCoder2:15b** (High-context reasoning)
-- **DeepSeek-Coder v2:16b** (Specialized for metadata processing)
-
----
-
-## 📚 CSV Upload
-
-1. Visit http://localhost:8000/batch-upload/
-2. Download CSV template, populate, and upload.
-
----
-
-## 📤 Export to Talis
-
-- Set Talis API credentials in `.env`.
-- Use export from web portal or management command:
-   ```
-   docker compose exec web python manage.py export_talis --resource-ids 1 2 3 --title "Reading List"
-   ```
-
----
-
-## 🗂 Project Structure
-
+### Core Components  
 ```
 oer_rebirth/
-├── docker-compose.yml
-├── .env.example
-├── requirements.txt
-├── manage.py
-├── oer_rebirth/
-│   ├── settings.py
-│   ├── celery.py
-│   └── ...
-├── resources/
-│   ├── models.py
-│   ├── views.py
-│   ├── tasks.py
+├── resources/ # Main Django app
+│   ├── models.py # OERResource, OERSource, HarvestJob
+│   ├── views.py # Dashboard, search, Talis analysis
+│   ├── admin.py # Admin interface with harvesting tools
 │   ├── services/
-│   │   ├── ai_utils.py
-│   │   ├── search_engine.py
-│   │   ├── talis.py
-│   └── management/
-│       └── commands/
-│           ├── fetch_oer.py
-│           └── export_talis.py
+│   │   ├── ai_utils.py # Embedding generation (SentenceTransformers)
+│   │   ├── search_engine.py # Semantic + keyword hybrid search
+│   │   └── talis_analysis.py # Reading list OER matching
+│   └── harvesters/ # API, OAI-PMH, CSV, MARCXML ingest
 ├── templates/
-└── ...
+└── docker-compose.yml # PostgreSQL + Django services
 ```
 
 ---
 
-## 🛠️ System Architecture
+## Installation  
 
-1. **Django Backend**:
-   - Core application logic
-   - API endpoints
-   - Task scheduling (Celery)
+### Prerequisites  
+- Docker and Docker Compose  
+- Git  
 
-2. **Vector Database Layer**:
-   - pgvector: PostgreSQL extension for vector search
-   - Qdrant: Alternative distributed vector database
+### Quick Start  
+1. **Clone the repository**  
+```bash
+git clone https://github.com/MMU-Library/oer_rebirth.git
+cd oer_rebirth
+```  
 
-3. **AI/ML Layer**:
-   - SentenceTransformers (`all-MiniLM-L6-v2`) for embeddings
-   - Integration with Meta-RAG agents for semantic search and recommendations
+2. **Configure environment variables**  
+```bash
+cp .env.example .env
+```  
+Key variables:  
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: Database credentials  
+- `DJANGO_SECRET_KEY`: Generate via `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`  
+- `EMBEDDING_MODEL_NAME`: Default `all-MiniLM-L6-v2`  
+- `VECTOR_BACKEND`: Default `pgvector`  
+- Optional: `TALIS_TENANT`, `TALIS_CLIENT_ID`, `TALIS_CLIENT_SECRET` for Talis API export  
 
-4. **Containerization**:
-   - Docker Compose for local development
-   - Redis: Task queue broker + cache
-   - PostgreSQL: Database
-   - Optional Qdrant deployment
+3. **Build and start services**  
+```bash
+docker-compose build
+docker-compose up
+```  
 
-5. **Frontend Layer**:
-   - Django templates
-   - Bootstrap UI components
-   - Custom JavaScript for interactivity
+4. **Run migrations and create superuser**  
+```bash
+docker-compose exec web python manage.py migrate
+docker-compose exec web python manage.py createsuperuser
+```  
 
----
-
-## Development
-
-### Run Tests
-
-```
-docker compose exec web python manage.py test
-```
-
-### Create and Apply Migrations
-
-```
-docker compose exec web python manage.py makemigrations
-docker compose exec web python manage.py migrate
-```
-
-### Access Database
-
-- **psql inside container:**
-  ```
-  docker compose exec db psql -U postgres -d oer_rebirth
-  ```
-- **Optional:** expose port 5432 in `docker-compose.override.yml` for desktop tools/VS Code/PGAdmin.
+5. **Access the platform**  
+- Dashboard: http://localhost:8000/  
+- Admin: http://localhost:8000/admin/  
 
 ---
 
-## API Integrations
+## Usage  
 
-- **OER Commons:** https://www.oercommons.org/api/resources
-- **OpenStax:** https://api.openstax.org/api/v2/resources
-- **Talis Aspire:** OAuth 2.0 credentials via `.env` (see included notes)
-- **MARCXML:** Supported via admin/preset with OAPEN and others
+### Initial Setup  
+1. **Add OER sources** via admin at `/admin/resources/oersource/add/`  
+   - Select source type (API, OAI-PMH, CSV, MARCXML)  
+   - Configure endpoint and credentials  
+   - Test connection before enabling  
 
----
+2. **Run harvesters** to populate the OER corpus  
+   - Use admin list actions or "Harvest" buttons on source detail pages  
+   - Monitor progress via "Harvest jobs" in admin  
 
-## Contributing
-
-1. Fork the repo
-2. Branch and commit changes
-3. Open a Pull Request
-
----
-
-## License
-
-[Add your license info here]
+3. **Generate embeddings** for semantic search  
+   - Admin: select resources → Actions → "Generate embeddings for selected resources"  
+   - Dashboard (staff only): click "Generate missing embeddings" in maintenance card  
 
 ---
 
-## Support
+## API Endpoints  
 
-- Open an issue on GitHub for troubleshooting or feature requests.
-- For advanced integration, ask about Qdrant vector DB, MARCXML, or custom AI models.
+### Search API  
+**Endpoint:** `/api/search/`  
+**Method:** GET  
+**Parameters:**  
+- `q` (required): search query  
+- `limit` (optional): max results, default 10  
 
----
-
-## 📝 Troubleshooting & Common Tasks
-
-- **Rebuild everything:**  
-  ```
-  docker compose down -v
-  docker compose up --build
-  ```
-- **Re-generate and index embeddings for search:**  
-  ```
-  docker compose exec web python manage.py shell
-  >>> from resources.services.ai_utils import generate_embeddings
-  >>> generate_embeddings()
-  ```
-
----
-
-## Credits
-
-Platform developed by Manchester Metropolitan University Library and Digital Services.
-
----
-
+**Response:**  
+```json
+{
+    "results": [
+        {
+            "id": 123,
+            "title": "Introduction to Statistics",
+            "url": "https://...",
+            "score": 0.87,
+            "source": "OpenStax",
+            "resource_type": "Textbook"
+        }
+    ]
+}
 ```
 
-### Key Enhancements:
+---
 
-1. Added **Meta-RAG Enhanced OER Agents** Section:
-   - Explains the AI-driven architecture
-   - Highlights agent specializations
-   - Details the LLM configuration
-   - Provides context for how agents interact with the system
+## Deployment  
 
-2. Expanded System Architecture Section:
-   - Added a clear breakdown of system components
-   - Clarified the role of vector databases
-   - Highlighted the integration points between AI and traditional systems
+### Production Considerations  
+1. Use a production-grade WSGI server: Replace Django dev server with Gunicorn or uWSGI  
+2. Serve static files via nginx or CDN: Configure `STATIC_ROOT` and run `collectstatic`  
+3. Enable HTTPS: Use Let's Encrypt or institutional certificates  
+4. Set `DEBUG=False` in production environment  
+5. Configure `ALLOWED_HOSTS` with your domain  
+6. Schedule background tasks: Use Celery or cron for harvesting and embedding generation  
+7. Monitor logs: Centralize logs with ELK stack or similar  
+8. Backup database: Regular PostgreSQL dumps  
 
-3. Improved Prerequisites Section:
-   - Added specific Python version requirements
-   - Mentioned Docker Compose v2+
+---
 
-4. Added Agent Configuration Details:
-   - Explained which models are used for what purposes
-   - Clarified the reasoning behind model selection
+## Contributing  
 
-5. Added Project Structure List:
-   - Provides a clear visual hierarchy of project files and directories
+This project is developed for MMU Library Services but contributions are welcome.  
 
-6. Enhanced Code Edit Section:
-   - Added guidance for large modifications
-   - Provided instructions for new file creation
+### Areas for Contribution  
+- Additional OER provider integrations  
+- Improved Talis Aspire API support  
+- Quality scoring algorithms  
+- Accessibility enhancements  
+- Multi-language support  
+- Performance optimizations  
 
+### Development Workflow  
+1. Fork the repository  
+2. Create a feature branch (`git checkout -b feature/new-harvester`)  
+3. Commit changes with clear messages  
+4. Push to your fork and submit a pull request  
+
+---
+
+## License  
+[Specify license: MIT, GPL, Apache 2.0, etc.]  
+
+---
+
+## Acknowledgements  
+- Built on [sentence-transformers](https://www.sbert.net/) for semantic search  
+
+---
+
+## Contact  
+
+**Project Lead:** [Your Name]  
+**Institution:** Manchester Metropolitan University Library Services  
+**Repository:** https://github.com/MMU-Library/oer_rebirth  
+
+For questions or collaboration inquiries, open an issue on GitHub or contact the development team.
+
+---

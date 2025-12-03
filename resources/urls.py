@@ -40,6 +40,9 @@ urlpatterns = [
     path('test-connection/<int:source_id>/', views.test_connection_view, name='test_oer_source_connection'),
     path('apply-preset/', views.apply_preset_view, name='apply_preset'),
 
+    # NEW: Staff maintenance - generate embeddings
+    path('embeddings/generate/', views.generate_missing_embeddings, name='generate_embeddings'),
+
     # Dynamic form handling - Admin templates
     path('create-source/', views.create_source, name='create_source'),
     path('load-configuration-form/', views.load_configuration_form, name='load_configuration_form'),

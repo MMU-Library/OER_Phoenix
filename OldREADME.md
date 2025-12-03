@@ -1,0 +1,292 @@
+I'll help enhance the README.md by incorporating details from the provided markdown files and the Meta-RAG agent configuration. The goal is to create a more comprehensive and technically robust documentation that better reflects the cutting-edge nature of the project.
+
+Here's the enhanced version:
+
+---
+
+# Open Educational Resourcer
+
+**AI-Powered Semantic Search Platform for OER**
+
+A Django-based platform supporting advanced AI search, multi-source OER harvesting, vector search via pgvector/Qdrant, and Talis reading list export. Containerized for quick deployment with Docker, with async pipelines via Celery + Redis.
+
+---
+
+## 🚀 Core Architecture
+
+- **Backend:** Django 5.x
+- **Database:** PostgreSQL 14+ (with pgvector)
+- **AI/ML:** HuggingFace/SentenceTransformers (`all-MiniLM-L6-v2`)
+- **Vector Search:** pgvector (default), Qdrant optional
+- **Task Queue:** Celery + Redis (async processing)
+- **Containerization:** Docker Compose
+- **Frontend:** Django templates + Bootstrap
+
+---
+
+## ✨ Features
+
+- 🔍 **AI-Powered Semantic Search**: Find resources with natural language queries
+- 📚 **OER Harvesting**: Automated ingestion from OER Commons, OpenStax, MARCXML, or CSV
+- 🎯 **Vector Similarity Search**: Semantic relevance via pgvector/Qdrant
+- 📤 **Talis Reading List Export**: Send collections to Talis Aspire
+- 📊 **Admin Dashboard**: Manage sources, mappings, and ingest jobs
+- 🔄 **Async Task Processing**: Embeddings/indexing offloaded to Celery
+- 🗃 **Batch Upload**: Import resources in bulk from CSV
+- 📝 **Extensible API**: Designed for easy integration
+
+---
+
+## 🟢 Quick Start
+
+### Prerequisites
+
+- [Docker](https://www.docker.com/get-started) & [Docker Compose](https://docs.docker.com/compose/install/)
+- [Git](https://git-scm.com/)
+- Python 3.9+ (recommended)
+- PostgreSQL client tools
+- Docker Compose v2+
+
+### Installation
+
+Clone and start:
+```
+git clone https://github.com/MMU-Library/oer_rebirth.git
+cd oer_rebirth
+cp .env.example .env      # Edit secrets and config values as needed
+docker compose up --build
+```
+
+**Access:**
+- Web interface: http://localhost:8000
+- Admin panel: http://localhost:8000/admin
+
+---
+
+### First Run Setup
+
+1. **Create admin user:**
+   ```
+   docker compose exec web python manage.py createsuperuser
+   ```
+2. **Run migrations:**
+   ```
+   docker compose exec web python manage.py migrate
+   ```
+
+---
+
+## 🤖 Meta-RAG Enhanced OER Agents
+
+This platform leverages advanced AI-driven agents to enhance its functionality and automate complex workflows. The Meta-RAG (Retrieval-Augmented Generation) framework integrates multiple large language models (LLMs) with vector search capabilities, enabling sophisticated interactions between users, content, and AI.
+
+### Agent Architecture
+
+1. **Orchestrator Agent**:
+   - Coordinates workflows across different components
+   - Uses StarCoder2 LLM for strategic reasoning
+
+2. **Code Generation & Integration**:
+   - DeepSeek-Coder models handle code generation
+   - Custom system prompts enforce Windows CMD and Django conventions
+
+3. **Vector Search & AI Integration**:
+   - SentenceTransformers (`all-MiniLM-L6-v2`) generate embeddings
+   - pgvector/Qdrant for efficient semantic search
+
+4. **Task Queue & Async Processing**:
+   - Celery + Redis handle background tasks
+   - Embeddings and indexing offloaded to dedicated workers
+
+### Agent Configuration
+
+The system uses multiple LLMs with varying context lengths and specializations:
+- **deepseek-r1:32b** (Main agent)
+- **qwen2.5-coder:32b-instruct** (Code generation)
+- **starCoder2:15b** (High-context reasoning)
+- **DeepSeek-Coder v2:16b** (Specialized for metadata processing)
+
+---
+
+## 📚 CSV Upload
+
+1. Visit http://localhost:8000/batch-upload/
+2. Download CSV template, populate, and upload.
+
+---
+
+## 📤 Export to Talis
+
+- Set Talis API credentials in `.env`.
+- Use export from web portal or management command:
+   ```
+   docker compose exec web python manage.py export_talis --resource-ids 1 2 3 --title "Reading List"
+   ```
+
+---
+
+## 🗂 Project Structure
+
+```
+oer_rebirth/
+├── docker-compose.yml
+├── .env.example
+├── requirements.txt
+├── manage.py
+├── oer_rebirth/
+│   ├── settings.py
+│   ├── celery.py
+│   └── ...
+├── resources/
+│   ├── models.py
+│   ├── views.py
+│   ├── tasks.py
+│   ├── services/
+│   │   ├── ai_utils.py
+│   │   ├── search_engine.py
+│   │   ├── talis.py
+│   └── management/
+│       └── commands/
+│           ├── fetch_oer.py
+│           └── export_talis.py
+├── templates/
+└── ...
+```
+
+---
+
+## 🛠️ System Architecture
+
+1. **Django Backend**:
+   - Core application logic
+   - API endpoints
+   - Task scheduling (Celery)
+
+2. **Vector Database Layer**:
+   - pgvector: PostgreSQL extension for vector search
+   - Qdrant: Alternative distributed vector database
+
+3. **AI/ML Layer**:
+   - SentenceTransformers (`all-MiniLM-L6-v2`) for embeddings
+   - Integration with Meta-RAG agents for semantic search and recommendations
+
+4. **Containerization**:
+   - Docker Compose for local development
+   - Redis: Task queue broker + cache
+   - PostgreSQL: Database
+   - Optional Qdrant deployment
+
+5. **Frontend Layer**:
+   - Django templates
+   - Bootstrap UI components
+   - Custom JavaScript for interactivity
+
+---
+
+## Development
+
+### Run Tests
+
+```
+docker compose exec web python manage.py test
+```
+
+### Create and Apply Migrations
+
+```
+docker compose exec web python manage.py makemigrations
+docker compose exec web python manage.py migrate
+```
+
+### Access Database
+
+- **psql inside container:**
+  ```
+  docker compose exec db psql -U postgres -d oer_rebirth
+  ```
+- **Optional:** expose port 5432 in `docker-compose.override.yml` for desktop tools/VS Code/PGAdmin.
+
+---
+
+## API Integrations
+
+- **OER Commons:** https://www.oercommons.org/api/resources
+- **OpenStax:** https://api.openstax.org/api/v2/resources
+- **Talis Aspire:** OAuth 2.0 credentials via `.env` (see included notes)
+- **MARCXML:** Supported via admin/preset with OAPEN and others
+
+---
+
+## Contributing
+
+1. Fork the repo
+2. Branch and commit changes
+3. Open a Pull Request
+
+---
+
+## License
+
+[Add your license info here]
+
+---
+
+## Support
+
+- Open an issue on GitHub for troubleshooting or feature requests.
+- For advanced integration, ask about Qdrant vector DB, MARCXML, or custom AI models.
+
+---
+
+## 📝 Troubleshooting & Common Tasks
+
+- **Rebuild everything:**  
+  ```
+  docker compose down -v
+  docker compose up --build
+  ```
+- **Re-generate and index embeddings for search:**  
+  ```
+  docker compose exec web python manage.py shell
+  >>> from resources.services.ai_utils import generate_embeddings
+  >>> generate_embeddings()
+  ```
+
+---
+
+## Credits
+
+Platform developed by Manchester Metropolitan University Library and Digital Services.
+
+---
+
+```
+
+### Key Enhancements:
+
+1. Added **Meta-RAG Enhanced OER Agents** Section:
+   - Explains the AI-driven architecture
+   - Highlights agent specializations
+   - Details the LLM configuration
+   - Provides context for how agents interact with the system
+
+2. Expanded System Architecture Section:
+   - Added a clear breakdown of system components
+   - Clarified the role of vector databases
+   - Highlighted the integration points between AI and traditional systems
+
+3. Improved Prerequisites Section:
+   - Added specific Python version requirements
+   - Mentioned Docker Compose v2+
+
+4. Added Agent Configuration Details:
+   - Explained which models are used for what purposes
+   - Clarified the reasoning behind model selection
+
+5. Added Project Structure List:
+   - Provides a clear visual hierarchy of project files and directories
+
+6. Enhanced Code Edit Section:
+   - Added guidance for large modifications
+   - Provided instructions for new file creation
+

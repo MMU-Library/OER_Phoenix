@@ -21,6 +21,41 @@ from resources.harvesters.oaipmh_harvester import OAIPMHHarvester
 from resources.harvesters.csv_harvester import CSVHarvester
 from resources.harvesters.marcxml_harvester import MARCXMLHarvester
 from resources.forms import OERSourceForm  # Import the unified form
+from resources.services import ai_utils  # NEW: for embedding generation
+
+
+# ---------------------------------------------------------------------------- #
+#                               Admin Actions                                   #
+# ---------------------------------------------------------------------------- #
+
+@admin.action(description="Generate embeddings for selected resources")
+def generate_embeddings_action(modeladmin, request, queryset):
+    """
+    Admin action to generate embeddings for selected OERResource instances.
+    """
+    updated = 0
+    failed = 0
+    
+    for resource in queryset:
+        success = ai_utils.compute_and_store_embedding_for_resource(resource.id)
+        if success:
+            updated += 1
+        else:
+            failed += 1
+    
+    if failed > 0:
+        modeladmin.message_user(
+            request,
+            f"Generated embeddings for {updated} resources. {failed} failed.",
+            level=messages.WARNING
+        )
+    else:
+        modeladmin.message_user(
+            request,
+            f"Successfully generated embeddings for {updated} resources.",
+            level=messages.SUCCESS
+        )
+
 
 # ---------------------------------------------------------------------------- #
 #                               Inline Admin                                    #
@@ -29,6 +64,7 @@ from resources.forms import OERSourceForm  # Import the unified form
 class OERSourceFieldMappingInline(admin.TabularInline):
     model = OERSourceFieldMapping
     extra = 1
+
 
 # ---------------------------------------------------------------------------- #
 #                               OER Source Admin                               #
@@ -199,7 +235,11 @@ class OERSourceAdmin(admin.ModelAdmin):
         
         return HttpResponseRedirect(reverse('admin:resources_oersource_changelist'))
 
-# Keep your other admin classes unchanged for HarvestJob and OERResource
+
+# ---------------------------------------------------------------------------- #
+#                               Harvest Job Admin                              #
+# ---------------------------------------------------------------------------- #
+
 @admin.register(HarvestJob)
 class HarvestJobAdmin(admin.ModelAdmin):
     list_display = [
@@ -285,6 +325,11 @@ class HarvestJobAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+
+# ---------------------------------------------------------------------------- #
+#                               OER Resource Admin                             #
+# ---------------------------------------------------------------------------- #
+
 @admin.register(OERResource)
 class OERResourceAdmin(admin.ModelAdmin):
     list_display = [
@@ -293,28 +338,48 @@ class OERResourceAdmin(admin.ModelAdmin):
         'publisher',
         'url_display',
         'resource_type',
-        'overall_quality_score',  # Display in list view
+        'overall_quality_score',
+        'has_embedding',  # Shows embedding status in list
     ]
     list_filter = [
         'source',
         'resource_type',
         'is_active',
         'language',
-        'overall_quality_score',  # Allow admin filter
+        'overall_quality_score',
     ]
     search_fields = ['title', 'description', 'publisher', 'author']
     readonly_fields = [
-        'content_embedding',
+        # Remove 'content_embedding' from here
         'created_at',
         'updated_at',
         'last_verified',
-        'overall_quality_score',  # Make it read-only in admin
+        'overall_quality_score',
+        'embedding_status',  # NEW: add a human-readable status instead
     ]
     list_per_page = 50
+    actions = [generate_embeddings_action]
 
     def url_display(self, obj):
         return format_html('<a href="{}" target="_blank">🔗 View</a>', obj.url)
     url_display.short_description = 'URL'
+
+    def has_embedding(self, obj):
+        """Display whether resource has an embedding (for list view)."""
+        return obj.content_embedding is not None
+    has_embedding.boolean = True
+    has_embedding.short_description = "Has embedding"
+
+    def embedding_status(self, obj):
+        """Display embedding status in the change form (human-readable)."""
+        if obj.content_embedding is not None:
+            return format_html(
+                '<span style="color: green;">✓ Embedding present (384 dimensions)</span>'
+            )
+        return format_html(
+            '<span style="color: orange;">⚠ No embedding</span>'
+        )
+    embedding_status.short_description = "Embedding status"
 
     fieldsets = (
         (None, {
@@ -330,22 +395,21 @@ class OERResourceAdmin(admin.ModelAdmin):
         ('Metadata', {
             'fields': (
                 'is_active',
-                'content_embedding',
+                'embedding_status',  # Changed from content_embedding
                 'created_at',
                 'updated_at',
                 'last_verified',
-                'overall_quality_score'  # Add to metadata fieldset
+                'overall_quality_score'
             ),
             'classes': ('collapse',)
         }),
     )
 
 
+# ---------------------------------------------------------------------------- #
+#                               Talis Push Job Admin                           #
+# ---------------------------------------------------------------------------- #
+
 @admin.register(TalisPushJob)
 class TalisPushJobAdmin(admin.ModelAdmin):
     list_display = ['id', 'status', 'target_url', 'created_at', 'started_at', 'completed_at', 'response_code']
-    readonly_fields = ['created_at', 'started_at', 'completed_at', 'status', 'response_code', 'response_body', 'report_snapshot']
-    search_fields = ['target_url']
-    list_filter = ['status']
-    def has_add_permission(self, request):
-        return False

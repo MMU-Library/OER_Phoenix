@@ -74,7 +74,7 @@
   </div>
 </div>
 
-<!-- Quick stats row (optional) -->
+<!-- Quick stats row -->
 <div class="row mb-4">
   <div class="col-md-4 mb-3">
     <div class="card text-center">
@@ -163,7 +163,7 @@
     </div>
   </div>
 
-  <!-- Right column: recent + breakdown -->
+  <!-- Right column: recent + breakdown + maintenance -->
   <div class="col-md-6 mb-4">
     <div class="card mb-3">
       <div class="card-header">
@@ -188,7 +188,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card mb-3">
       <div class="card-header">
         <h2 class="h5 mb-0">Resource breakdown by type</h2>
       </div>
@@ -207,6 +207,27 @@
         {% endif %}
       </div>
     </div>
+
+    <!-- Staff-only maintenance card -->
+    {% if user.is_staff %}
+      <div class="card border-warning">
+        <div class="card-header bg-warning bg-opacity-10">
+          <h2 class="h5 mb-0">⚙️ Maintenance (Staff only)</h2>
+        </div>
+        <div class="card-body">
+          <p class="mb-2">
+            Generate embeddings for any resources that are currently missing them.
+            This enables semantic search and Talis list analysis.
+          </p>
+          <a href="{% url 'resources:generate_embeddings' %}" class="btn btn-outline-warning btn-sm">
+            Generate missing embeddings
+          </a>
+          <a href="{% url 'admin:resources_oerresource_changelist' %}" class="btn btn-link btn-sm">
+            View all resources
+          </a>
+        </div>
+      </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
