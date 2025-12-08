@@ -1,12 +1,14 @@
 {% extends 'base.html' %}
+{% load oer_filters %}
 
 {% block title %}AI Search - OER Platform{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-md-12">
-        <h1 class="mb-4">AI-Powered Resource Search</h1>
+        <h1 class="mb-4">Find Open Resources</h1>
         
+        <!-- Search Form -->
         <form method="post" class="mb-4">
             {% csrf_token %}
             <div class="input-group input-group-lg">
@@ -23,100 +25,240 @@
         </form>
 
         {% if detailed_results %}
-            <h2 class="mb-3">AI Search Results ({{ detailed_results|length }})</h2>
-            <div class="d-flex justify-content-end mb-3">
-                <form method="post" action="{% url 'resources:search_export_talis' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline-secondary">Export Results as Talis CSV</button>
-                </form>
-            </div>
             <div class="row">
-                {% for r in detailed_results %}
-                <div class="col-md-6 mb-3">
-                    <div class="card h-100">
+                <!-- Filters Sidebar -->
+                <div class="col-md-3 mb-4">
+                    <div class="card shadow-sm sticky-top" style="top: 20px;">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Filter Results</h5>
+                        </div>
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h5 class="card-title">{{ r.resource.title }}</h5>
-                                <div class="text-end">
-                                  <div><strong>Score:</strong> {{ r.final_score|floatformat:3 }}</div>
-                                  <div><small class="text-muted">Reason: {{ r.match_reason }}</small></div>
+                            <form method="get" action="{% url 'resources:ai_search' %}" id="filter-form">
+                                <input type="hidden" name="query" value="{{ query }}">
+                                
+                                <!-- Source Filter -->
+                                {% if facets.sources %}
+                                <div class="mb-3">
+                                    <h6 class="mb-2">Collection</h6>
+                                    {% for s in facets.sources %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="source" value="{{ s.source__id }}" 
+                                                   id="source_{{ s.source__id }}"
+                                                   {% if s.source__id|stringformat:"s" in applied_filters.sources %}checked{% endif %}>
+                                            <label class="form-check-label small" for="source_{{ s.source__id }}">
+                                                {{ s.source__display_name|default:s.source__name }} ({{ s.count }})
+                                            </label>
+                                        </div>
+                                    {% endfor %}
                                 </div>
-                            </div>
-                            <p class="card-text">{{ r.resource.description|truncatewords:35 }}</p>
-                            <div class="mb-2">
-                                <small class="text-muted">
-                                    <strong>Source:</strong> {{ r.resource.source.name }}<br>
-                                    <strong>Quality:</strong> {{ r.resource.overall_quality_score|default:0 }}
-                                </small>
-                            </div>
-                            <div class="mb-2">
-                                <small class="text-muted">Similarity: {{ r.similarity_score|floatformat:3 }} | Quality boost: {{ r.quality_boost|floatformat:3 }}</small>
-                            </div>
-                            <a href="{{ r.resource.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                View Resource
-                            </a>
+                                {% endif %}
+                                
+                                <!-- Language Filter -->
+                                {% if facets.languages %}
+                                <div class="mb-3">
+                                    <h6 class="mb-2">Language</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="language" value="en" id="lang_en"
+                                               {% if 'en' in applied_filters.languages %}checked{% endif %}>
+                                        <label class="form-check-label small" for="lang_en">
+                                            English only
+                                        </label>
+                                    </div>
+                                    {% for l in facets.languages %}
+                                        {% if l.language != 'en' %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="language" value="{{ l.language }}" 
+                                                   id="lang_{{ l.language }}"
+                                                   {% if l.language in applied_filters.languages %}checked{% endif %}>
+                                            <label class="form-check-label small" for="lang_{{ l.language }}">
+                                                {{ l.language|upper }} ({{ l.count }})
+                                            </label>
+                                        </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Resource Type Filter -->
+                                {% if facets.resource_types %}
+                                <div class="mb-3">
+                                    <h6 class="mb-2">Resource Type</h6>
+                                    {% for t in facets.resource_types %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="resource_type" value="{{ t.resource_type }}" 
+                                                   id="type_{{ forloop.counter }}"
+                                                   {% if t.resource_type in applied_filters.resource_types %}checked{% endif %}>
+                                            <label class="form-check-label small" for="type_{{ forloop.counter }}">
+                                                {{ t.resource_type|default:"Unspecified" }} ({{ t.count }})
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Subject Filter (Top 10) -->
+                                {% if facets.subjects %}
+                                <div class="mb-3">
+                                    <h6 class="mb-2">Subject Area</h6>
+                                    {% for subj in facets.subjects|slice:":10" %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="subject" value="{{ subj.subject }}" 
+                                                   id="subj_{{ forloop.counter }}"
+                                                   {% if subj.subject in applied_filters.subjects %}checked{% endif %}>
+                                            <label class="form-check-label small" for="subj_{{ forloop.counter }}">
+                                                {{ subj.subject|truncatewords:3 }} ({{ subj.count }})
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                
+                                <button type="submit" class="btn btn-primary btn-sm w-100 mb-2">Apply Filters</button>
+                                <a href="{% url 'resources:ai_search' %}?query={{ query }}" class="btn btn-outline-secondary btn-sm w-100">Clear Filters</a>
+                            </form>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
-            </div>
-        {% elif results %}
-            <h2 class="mb-3">Search Results ({{ results|length }})</h2>
-            <div class="row">
-                {% for resource, similarity in results %}
-                <div class="col-md-6 mb-3">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h5 class="card-title">{{ resource.title }}</h5>
-                                <span class="badge bg-success">{{ similarity }}% match</span>
-                            </div>
-                            <p class="card-text">{{ resource.description|truncatewords:30 }}</p>
-                            <div class="mb-2">
-                                <small class="text-muted">
-                                    <strong>Source:</strong> {{ resource.source }}<br>
-                                    <strong>License:</strong> {{ resource.license }}
-                                </small>
-                            </div>
-                            <a href="{{ resource.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                View Resource
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        {% elif query %}
-            <div class="alert alert-info">
-                No resources found for "{{ query }}". Try a different search term.
-            </div>
-        {% endif %}
 
-        {% if batch_search and grouped_results %}
-            <h2 class="mb-3">Batch Search Results</h2>
-            {% for item in grouped_results %}
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h5>Uploaded: {{ item.resource.title }}</h5>
+                <!-- Results Column -->
+                <div class="col-md-9">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="mb-0">AI Search Results ({{ detailed_results|length }})</h2>
+                        
+                        <div class="d-flex gap-2">
+                            <!-- Sort Dropdown -->
+                            <select class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()" name="sort">
+                                <option value="relevance" {% if sort_by == 'relevance' %}selected{% endif %}>Relevance</option>
+                                <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest First</option>
+                                <option value="quality" {% if sort_by == 'quality' %}selected{% endif %}>Highest Quality</option>
+                                <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Title A-Z</option>
+                            </select>
+                            
+                            <!-- Export Button -->
+                            <form method="post" action="{% url 'resources:search_export_talis' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                    Export as Talis CSV
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <h6>Similar Resources:</h6>
-                        <div class="row">
-                            {% for doc, score in item.matches %}
-                            <div class="col-md-4">
-                                <div class="card mb-2">
+
+                    <!-- Results Grid -->
+                    <div class="row">
+                        {% for r in detailed_results %}
+                            <div class="col-md-12 mb-3">
+                                <div class="card h-100 shadow-sm">
                                     <div class="card-body">
-                                        <p class="card-text small">{{ doc.metadata.source }}</p>
-                                        <span class="badge bg-info">Score: {{ score|floatformat:2 }}</span>
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="flex-grow-1">
+                                                <h5 class="card-title mb-1">
+                                                    {{ r.resource.title }}
+                                                    {% if r.resource.language != 'en' %}
+                                                        {{ r.resource.language|language_badge }}
+                                                    {% endif %}
+                                                </h5>
+                                                <div class="mb-2">
+                                                    {{ r.resource.source|source_badge }}
+                                                    {{ r.match_reason|match_reason_badge }}
+                                                    {% if r.resource.overall_quality_score > 0 %}
+                                                        {{ r.resource.overall_quality_score|star_rating }}
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="text-end ms-3">
+                                                <div class="badge bg-primary" title="Final relevance score">
+                                                    Score: {{ r.final_score|floatformat:2 }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <p class="card-text">{{ r.resource.description|truncatewords:40 }}</p>
+                                        
+                                        <div class="mb-2">
+                                            <small class="text-muted">
+                                                {% if r.resource.subject %}
+                                                    <strong>Subject:</strong> {{ r.resource.subject }} ·
+                                                {% endif %}
+                                                {% if r.resource.author %}
+                                                    <strong>Author:</strong> {{ r.resource.author }} ·
+                                                {% endif %}
+                                                {% if r.resource.license %}
+                                                    <strong>License:</strong> {{ r.resource.license }}
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                        
+                                        <div class="d-flex gap-2 align-items-center">
+                                            <a href="{{ r.resource.url }}" target="_blank" class="btn btn-sm btn-primary">
+                                                View Resource
+                                            </a>
+                                            <small class="text-muted">
+                                                Semantic: {{ r.similarity_score|floatformat:2 }} | Quality: {{ r.quality_boost|floatformat:2 }}
+                                            </small>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            {% endfor %}
-                        </div>
+                        {% endfor %}
                     </div>
                 </div>
-            {% endfor %}
+            </div>
+
+        {% elif results %}
+            <!-- Legacy results format (if still used) -->
+            <h2 class="mb-3">Search Results ({{ results|length }})</h2>
+            <div class="row">
+                {% for resource, similarity in results %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title">{{ resource.title }}</h5>
+                                    <span class="badge bg-success">{{ similarity }}% match</span>
+                                </div>
+                                <p class="card-text">{{ resource.description|truncatewords:30 }}</p>
+                                <div class="mb-2">
+                                    <small class="text-muted">
+                                        <strong>Source:</strong> {{ resource.source }}<br>
+                                        <strong>License:</strong> {{ resource.license }}
+                                    </small>
+                                </div>
+                                <a href="{{ resource.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    View Resource
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+        {% elif query %}
+            <div class="alert alert-info">
+                <h5>No resources found for "{{ query }}"</h5>
+                <p class="mb-0">Try:</p>
+                <ul class="mb-0">
+                    <li>Using different keywords or synonyms</li>
+                    <li>Broadening your search terms</li>
+                    <li>Checking the spelling</li>
+                </ul>
+            </div>
         {% endif %}
     </div>
 </div>
+
+<script>
+// Auto-submit form when filters change
+document.querySelectorAll('#filter-form input[type="checkbox"]').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        document.getElementById('filter-form').submit();
+    });
+});
+</script>
+
 {% endblock %}

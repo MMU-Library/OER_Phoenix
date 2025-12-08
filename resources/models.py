@@ -4,11 +4,13 @@ OER Source Management Models
 Dynamic configuration for OER API sources with admin interface
 """
 
+
 from django.db import models
 from django.core.validators import URLValidator
 from django.utils import timezone
 from pgvector.django import VectorField
 import json
+
 
 class OERSource(models.Model):
     """
@@ -19,12 +21,12 @@ class OERSource(models.Model):
     SOURCE_TYPES = [
         ('API', 'API Harvester'),
         ('OAIPMH', 'OAI-PMH Harvester'),
-        ('CSV', 'CSV Harvester'),  # ADDED CSV
+        ('CSV', 'CSV Harvester'),
         ('MARCXML', 'MARCXML Harvester'),
     ]
     
     source_type = models.CharField(
-        max_length=20,  # CHANGED from 50 to 20 to match choices
+        max_length=20,
         choices=SOURCE_TYPES,
         default='API',
         help_text="Select the type of harvester to use for this source"
@@ -33,6 +35,13 @@ class OERSource(models.Model):
     # Basic Information
     name = models.CharField(max_length=200, unique=True)
     description = models.TextField(blank=True)
+    
+    # NEW: User-friendly display name
+    display_name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="User-friendly display name (e.g., 'OAPEN Open Access Books' instead of 'OAPEN MARCXML dump')"
+    )
     
     # API Configuration
     api_endpoint = models.URLField(
@@ -110,7 +119,7 @@ class OERSource(models.Model):
     )
     
     # Status & Tracking
-    STATUS_CHOICES = [  # ADDED consistent status choices
+    STATUS_CHOICES = [
         ('active', 'Active'),
         ('inactive', 'Inactive'),
         ('testing', 'Testing'),
@@ -132,10 +141,15 @@ class OERSource(models.Model):
     class Meta:
         verbose_name = "OER Source"
         verbose_name_plural = "OER Sources"
-        ordering = ['-is_active', 'name']
+        ordering = ['display_name', 'name']  # Updated to prioritize display_name
     
     def __str__(self):
-        return f"{self.name} ({self.get_status_display()})"
+        return f"{self.get_display_name()} ({self.get_status_display()})"
+    
+    def get_display_name(self):
+        """Return display_name if set, otherwise fall back to name"""
+        return self.display_name if self.display_name else self.name
+
 
 class OERResource(models.Model):
     """
@@ -160,9 +174,22 @@ class OERResource(models.Model):
     format = models.CharField(max_length=100, blank=True)
     
     # AI/ML Fields
-    content_embedding = VectorField(dimensions=384, null=True, blank=True)  # Added blank=True
+    content_embedding = VectorField(dimensions=384, null=True, blank=True)
     keywords = models.JSONField(default=list, blank=True)
     ai_generated_summary = models.TextField(blank=True)
+    
+    # NEW: Translation fields for non-English resources
+    title_en = models.CharField(
+        max_length=500, 
+        blank=True, 
+        null=True,
+        help_text="English translation of title (auto-generated during harvest)"
+    )
+    description_en = models.TextField(
+        blank=True, 
+        null=True,
+        help_text="English translation of description (auto-generated during harvest)"
+    )
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
@@ -170,7 +197,7 @@ class OERResource(models.Model):
     last_verified = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
-    #Quality Metrics
+    # Quality Metrics
     overall_quality_score = models.FloatField(default=0.0, db_index=True)
     
     class Meta:
@@ -183,7 +210,28 @@ class OERResource(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.title} ({self.source.name})"
+        return f"{self.title} ({self.source.get_display_name()})"
+    
+    def get_title_display(self, prefer_english=False):
+        """Return appropriate title based on language preference"""
+        if prefer_english and self.language != 'en' and self.title_en:
+            return self.title_en
+        return self.title
+    
+    def get_description_display(self, prefer_english=False):
+        """Return appropriate description based on language preference"""
+        if prefer_english and self.language != 'en' and self.description_en:
+            return self.description_en
+        return self.description
+    
+    def needs_translation(self):
+        """Check if resource needs translation"""
+        return self.language and self.language != 'en' and not self.title_en
+    
+    def is_non_english(self):
+        """Check if resource is in a language other than English"""
+        return self.language and self.language != 'en'
+
 
 class OERSourceFieldMapping(models.Model):
     """
@@ -234,6 +282,7 @@ class OERSourceFieldMapping(models.Model):
     def __str__(self):
         return f"{self.source_field_path} → {list(self.target_model_fields.keys())[0]}"
 
+
 class HarvestJob(models.Model):
     """
     Represents a harvesting job for an OER source.
@@ -243,11 +292,11 @@ class HarvestJob(models.Model):
     status = models.CharField(
         max_length=20,
         choices=[
-            ('pending', 'Pending'),  # CHANGED from 'queued' to 'pending'
+            ('pending', 'Pending'),
             ('running', 'Running'),
             ('completed', 'Completed'),
             ('failed', 'Failed'),
-            ('partial', 'Partial'),  # ADDED partial status
+            ('partial', 'Partial'),
         ],
         default='pending'
     )
@@ -281,7 +330,7 @@ class HarvestJob(models.Model):
         ordering = ['-started_at']
     
     def __str__(self):
-        return f"Harvest job for {self.source.name} ({self.get_status_display()})"
+        return f"Harvest job for {self.source.get_display_name()} ({self.get_status_display()})"
     
     @property
     def duration(self):

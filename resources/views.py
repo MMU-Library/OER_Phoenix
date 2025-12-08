@@ -68,16 +68,16 @@ TALIS_ITEMS_KEY = "dashboard_talis_item_analyses"
 
 def dashboard_view(request):
     """
-    Librarian-facing landing page.
-
+    Librarian-facing landing page with data visualizations.
     Shows:
     - AI search hero (form posts to ai_search).
     - Talis Reading List analysis widget (CSV + URL, posts to talis_list_analyse_view).
     - Quick stats: recent resources, top subjects, resource type breakdown, sources.
+    - Data visualizations (Chart.js)
     """
     try:
         recent_resources = OERResource.objects.filter(is_active=True).order_by("-created_at")[:10]
-
+        
         top_subjects = (
             OERResource.objects.filter(is_active=True)
             .exclude(subject="")
@@ -85,32 +85,70 @@ def dashboard_view(request):
             .annotate(count=models.Count("id"))
             .order_by("-count")[:15]
         )
-
+        
         type_counts = (
             OERResource.objects.filter(is_active=True)
             .values("resource_type")
             .annotate(count=models.Count("id"))
-            .order_by()
+            .order_by("-count")
         )
-
+        
         sources = (
             OERSource.objects.filter(is_active=True)
-            .values("name")
             .annotate(count=models.Count("resources"))
             .order_by("-count")[:10]
         )
-
+        
+        # Get total counts for stats cards
+        total_resources = OERResource.objects.filter(is_active=True).count()
+        distinct_subjects = OERResource.objects.filter(is_active=True).exclude(subject="").values("subject").distinct().count()
+        active_sources_count = OERSource.objects.filter(is_active=True).count()
+        
+        # Prepare data for Chart.js visualizations
+        # 1. Resource type breakdown (for pie chart)
+        type_labels = []
+        type_data = []
+        for t in type_counts:
+            label = t['resource_type'] if t['resource_type'] else 'Unspecified'
+            type_labels.append(label)
+            type_data.append(t['count'])
+        
+        # 2. Top subjects (for horizontal bar chart)
+        subject_labels = [s['subject'][:30] for s in top_subjects[:10]]  # Truncate long names
+        subject_data = [s['count'] for s in top_subjects[:10]]
+        
+        # 3. Collection sources (for doughnut chart)
+        source_labels = [s.get_display_name() if hasattr(s, 'get_display_name') else s.name for s in sources]
+        source_data = [s.count for s in sources]
+        
         context = {
             "recent_resources": recent_resources,
             "top_subjects": top_subjects,
             "type_counts": list(type_counts),
             "sources": list(sources),
+            "stats": {
+                "total_resources": total_resources,
+                "distinct_subjects": distinct_subjects,
+                "active_sources": active_sources_count,
+            },
+            # Chart data
+            "chart_data": {
+                "type_labels": json.dumps(type_labels),
+                "type_data": json.dumps(type_data),
+                "subject_labels": json.dumps(subject_labels),
+                "subject_data": json.dumps(subject_data),
+                "source_labels": json.dumps(source_labels),
+                "source_data": json.dumps(source_data),
+            }
         }
+        
         return render(request, "resources/dashboard.html", context)
+        
     except Exception as e:
         logger.error(f"Error in dashboard_view: {str(e)}")
         messages.error(request, "An error occurred while loading the dashboard.")
         return redirect('resources:home')
+
 
 
 def talis_list_analyse_view(request):
@@ -311,35 +349,93 @@ def _store_analysis_in_session(request, analysis_result) -> None:
 
 # Search Views
 def ai_search(request):
+    """
+    Enhanced AI-powered search with filtering, faceting, and sorting
+    """
     try:
-        if request.method == 'POST':
-            query = request.POST.get('query', '').strip()
-            if not query:
-                return render(request, TEMPLATE_SEARCH, {
-                    'results': [],
-                    'query': query,
-                    'ai_search': True
-                })
+        # Get query from POST or GET
+        query = request.POST.get('query', request.GET.get('query', '')).strip()
+        sort_by = request.GET.get('sort', 'relevance')
+        
+        # Collect applied filters from GET parameters
+        applied_filters = {
+            'sources': request.GET.getlist('source'),
+            'languages': request.GET.getlist('language'),
+            'resource_types': request.GET.getlist('resource_type'),
+            'subjects': request.GET.getlist('subject'),
+        }
+        
+        # Build filter dict for search engine
+        search_filters = {}
+        if applied_filters['sources']:
+            search_filters['source'] = applied_filters['sources']
+        if applied_filters['languages']:
+            search_filters['language'] = applied_filters['languages']
+        if applied_filters['resource_types']:
+            search_filters['resource_type'] = applied_filters['resource_types']
+        if applied_filters['subjects']:
+            search_filters['subject'] = applied_filters['subjects']
+        
+        detailed_results = []
+        facets = {}
+        
+        if query:
             from .services.search_engine import OERSearchEngine
             engine = OERSearchEngine()
-            detailed = engine.hybrid_search(query, limit=20)
-
-            # This is now your main result structure
-            return render(request, TEMPLATE_SEARCH, {
-                'detailed_results': detailed,
-                'query': query,
-                'ai_search': True
-            })
-
-        return render(request, TEMPLATE_SEARCH, {
-            'detailed_results': [],
-            'query': '',
+            
+            # Perform hybrid search with filters
+            results = engine.hybrid_search(
+                query=query,
+                filters=search_filters if search_filters else None,
+                limit=50
+            )
+            
+            # Apply sorting
+            results = engine.sort_results(results, sort_by=sort_by)
+            
+            # Get facets for filtering sidebar
+            facets = engine.get_facets(
+                query=query,
+                applied_filters=search_filters if search_filters else None
+            )
+            
+            detailed_results = results
+            
+            # Store in session for export
+            request.session['last_search_results'] = [
+                {
+                    'id': getattr(r.resource, 'id', None),
+                    'title': getattr(r.resource, 'title', ''),
+                    'url': getattr(r.resource, 'url', ''),
+                    'score': float(r.final_score),
+                    'source': getattr(r.resource.source, 'name', ''),
+                }
+                for r in results
+            ]
+        
+        context = {
+            'query': query,
+            'detailed_results': detailed_results,
+            'facets': facets,
+            'applied_filters': applied_filters,
+            'sort_by': sort_by,
             'ai_search': True
-        })
+        }
+        
+        return render(request, TEMPLATE_SEARCH, context)
+        
     except Exception as e:
         logger.error(f"Error in ai_search: {str(e)}")
-        messages.error(request, "An error occurred during the search.")
-        return redirect('resources:ai_search')
+        messages.error(request, f"An error occurred during the search: {str(e)}")
+        return render(request, TEMPLATE_SEARCH, {
+            'query': '',
+            'detailed_results': [],
+            'facets': {},
+            'applied_filters': {'sources': [], 'languages': [], 'resource_types': [], 'subjects': []},
+            'sort_by': 'relevance',
+            'ai_search': True
+        })
+
 
 
 def compare_view(request):

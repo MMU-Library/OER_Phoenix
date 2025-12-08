@@ -1,233 +1,304 @@
 {% extends "base.html" %}
-{% block title %}OER Dashboard{% endblock %}
+{% load oer_filters %}
+
+{% block title %}OER Discovery Platform{% endblock %}
 
 {% block content %}
 <div class="mt-4 mb-4">
-  <h1 class="mb-2">OER Dashboard</h1>
-  <p class="text-muted">
-    Discovery and reading-list analysis workspace for subject librarians.
-  </p>
+    <h1 class="mb-2">OER Discovery Platform</h1>
+    <p class="text-muted">
+        Find open alternatives and analyze Talis reading lists
+    </p>
 </div>
 
 <div class="row mb-4">
-  <!-- AI OER Search -->
-  <div class="col-md-8 mb-3">
-    <div class="card">
-      <div class="card-header">
-        <h2 class="h5 mb-0">AI OER Search</h2>
-      </div>
-      <div class="card-body">
-        <form method="post" action="{% url 'resources:ai_search' %}">
-          {% csrf_token %}
-          <div class="input-group">
-            <input type="text"
-                   name="query"
-                   class="form-control"
-                   placeholder="Search for OER (e.g. 'introduction to statistics', 'research methods textbook')"
-                   required>
-            <button class="btn btn-primary" type="submit">Search</button>
-          </div>
-          <small class="form-text text-muted">
-            Uses semantic + keyword search over all indexed OER resources.
-          </small>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Talis Reading List Analysis -->
-  <div class="col-md-4 mb-3">
-    <div class="card">
-      <div class="card-header">
-        <h2 class="h5 mb-0">Talis Reading List analysis</h2>
-      </div>
-      <div class="card-body">
-        <form method="post"
-              enctype="multipart/form-data"
-              action="{% url 'resources:talis_analyse_dashboard' %}">
-          {% csrf_token %}
-
-          <div class="mb-2">
-            <label for="id_dash_talis_csv" class="form-label">Talis CSV file</label>
-            <input type="file" name="talis_csv" id="id_dash_talis_csv" class="form-control">
-            <div class="form-text">
-              Export a list from Talis as CSV and upload it for AI analysis.
+    <!-- AI OER Search -->
+    <div class="col-md-8 mb-3">
+        <div class="card border-primary shadow-sm">
+            <div class="card-header bg-primary bg-opacity-10">
+                <h2 class="h5 mb-0">🔍 Find Open Resources</h2>
             </div>
-          </div>
-
-          <div class="mb-2">
-            <label for="id_dash_talis_url" class="form-label">Talis list URL</label>
-            <input type="url"
-                   name="talis_url"
-                   id="id_dash_talis_url"
-                   class="form-control"
-                   placeholder="https://mmu.rl.talis.com/lists/…">
-            <div class="form-text">
-              Or paste a list API/Linked Data URL (experimental).
+            <div class="card-body">
+                <form method="post" action="{% url 'resources:ai_search' %}">
+                    {% csrf_token %}
+                    <div class="input-group input-group-lg">
+                        <input type="text"
+                               name="query"
+                               class="form-control"
+                               placeholder="e.g., 'introduction to statistics', 'research methods textbook'"
+                               required>
+                        <button class="btn btn-primary" type="submit">Search</button>
+                    </div>
+                    <small class="form-text text-muted mt-2 d-block">
+                        Intelligent search across thousands of open textbooks, articles, and learning materials
+                    </small>
+                </form>
             </div>
-          </div>
-
-          <button type="submit" class="btn btn-secondary btn-sm">Analyse reading list</button>
-        </form>
-      </div>
+        </div>
     </div>
-  </div>
+
+    <!-- Talis Reading List Analysis -->
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">📚 Analyze Talis Reading List</h2>
+            </div>
+            <div class="card-body">
+                <form method="post"
+                      enctype="multipart/form-data"
+                      action="{% url 'resources:talis_analyse_dashboard' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-2">
+                        <label for="id_dash_talis_csv" class="form-label">Upload CSV</label>
+                        <input type="file" name="talis_csv" id="id_dash_talis_csv" class="form-control form-control-sm">
+                        <div class="form-text">
+                            Export from Talis Aspire as CSV
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_dash_talis_url" class="form-label">Or paste list URL</label>
+                        <input type="url"
+                               name="talis_url"
+                               id="id_dash_talis_url"
+                               class="form-control form-control-sm"
+                               placeholder="https://mmu.rl.talis.com/lists/...">
+                        <div class="form-text">
+                            Linked Data URL (experimental)
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-secondary btn-sm w-100">Find OER Alternatives</button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Quick stats row -->
 <div class="row mb-4">
-  <div class="col-md-4 mb-3">
-    <div class="card text-center">
-      <div class="card-body">
-        <h3 class="h6 text-muted">Total resources</h3>
-        <p class="display-6">
-          {{ recent_resources|length|add:0 }}
-        </p>
-        <small class="text-muted">
-          Recently indexed (showing last {{ recent_resources|length }}).
-        </small>
-      </div>
+    <div class="col-md-4 mb-3">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h3 class="h6 text-muted mb-2">Open Resources</h3>
+                <p class="display-6 mb-2">{{ stats.total_resources|default:"0" }}</p>
+                <small class="text-muted">
+                    Textbooks, articles, and course materials
+                </small>
+            </div>
+        </div>
     </div>
-  </div>
-
-  <div class="col-md-4 mb-3">
-    <div class="card text-center">
-      <div class="card-body">
-        <h3 class="h6 text-muted">Distinct subjects</h3>
-        <p class="display-6">
-          {{ top_subjects|length|add:0 }}
-        </p>
-        <small class="text-muted">
-          Top subject areas based on indexed resources.
-        </small>
-      </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h3 class="h6 text-muted mb-2">Subject Areas</h3>
+                <p class="display-6 mb-2">{{ stats.distinct_subjects|default:"0" }}</p>
+                <small class="text-muted">
+                    Academic disciplines represented
+                </small>
+            </div>
+        </div>
     </div>
-  </div>
-
-  <div class="col-md-4 mb-3">
-    <div class="card text-center">
-      <div class="card-body">
-        <h3 class="h6 text-muted">Active sources</h3>
-        <p class="display-6">
-          {{ sources|length|add:0 }}
-        </p>
-        <small class="text-muted">
-          Active OER sources contributing content.
-        </small>
-      </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h3 class="h6 text-muted mb-2">Resource Collections</h3>
+                <p class="display-6 mb-2">{{ stats.active_sources|default:"0" }}</p>
+                <small class="text-muted">
+                    OAPEN, DOAB, OER Commons, and more
+                </small>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
 <div class="row">
-  <!-- Left column: subjects + sources -->
-  <div class="col-md-6 mb-4">
-    <div class="card mb-3">
-      <div class="card-header">
-        <h2 class="h5 mb-0">Top subjects</h2>
-      </div>
-      <div class="card-body">
-        {% if top_subjects %}
-          <ul class="list-group list-group-flush">
-            {% for s in top_subjects %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ s.subject }}
-                <span class="badge bg-secondary rounded-pill">{{ s.count }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="text-muted mb-0">No subject data available yet.</p>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2 class="h5 mb-0">Sources</h2>
-      </div>
-      <div class="card-body">
-        {% if sources %}
-          <ul class="list-group list-group-flush">
-            {% for s in sources %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ s.name }}
-                <span class="badge bg-secondary rounded-pill">{{ s.count }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="text-muted mb-0">No OER sources configured or active.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <!-- Right column: recent + breakdown + maintenance -->
-  <div class="col-md-6 mb-4">
-    <div class="card mb-3">
-      <div class="card-header">
-        <h2 class="h5 mb-0">Recently added resources</h2>
-      </div>
-      <div class="card-body">
-        {% if recent_resources %}
-          <ul class="list-group list-group-flush">
-            {% for r in recent_resources %}
-              <li class="list-group-item">
-                <strong>{{ r.title }}</strong><br>
-                <small class="text-muted">
-                  {{ r.source.name }}{% if r.created_at %} · {{ r.created_at|date:"Y-m-d" }}{% endif %}
-                  {% if r.subject %} · {{ r.subject }}{% endif %}
-                </small>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="text-muted mb-0">No resources indexed yet.</p>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="card mb-3">
-      <div class="card-header">
-        <h2 class="h5 mb-0">Resource breakdown by type</h2>
-      </div>
-      <div class="card-body">
-        {% if type_counts %}
-          <ul class="list-group list-group-flush">
-            {% for t in type_counts %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ t.resource_type|default:"(unspecified)" }}
-                <span class="badge bg-secondary rounded-pill">{{ t.count }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="text-muted mb-0">No resource type data available yet.</p>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Staff-only maintenance card -->
-    {% if user.is_staff %}
-      <div class="card border-warning">
-        <div class="card-header bg-warning bg-opacity-10">
-          <h2 class="h5 mb-0">⚙️ Maintenance (Staff only)</h2>
+    <!-- Left column: subjects + sources -->
+    <div class="col-md-6 mb-4">
+        <div class="card mb-3 shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Top Subject Areas</h2>
+            </div>
+            <div class="card-body">
+                {% if top_subjects %}
+                    <ul class="list-group list-group-flush">
+                        {% for s in top_subjects %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ s.subject }}
+                                <span class="badge bg-secondary rounded-pill">{{ s.count }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted mb-2">No subject data yet</p>
+                        <small class="text-muted">Resources will appear here after harvest jobs complete</small>
+                    </div>
+                {% endif %}
+            </div>
         </div>
-        <div class="card-body">
-          <p class="mb-2">
-            Generate embeddings for any resources that are currently missing them.
-            This enables semantic search and Talis list analysis.
-          </p>
-          <a href="{% url 'resources:generate_embeddings' %}" class="btn btn-outline-warning btn-sm">
-            Generate missing embeddings
-          </a>
-          <a href="{% url 'admin:resources_oerresource_changelist' %}" class="btn btn-link btn-sm">
-            View all resources
-          </a>
+        
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Resource Collections</h2>
+            </div>
+            <div class="card-body">
+                {% if sources %}
+                    <ul class="list-group list-group-flush">
+                        {% for s in sources %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ s|source_badge }}
+                                <span class="badge bg-secondary rounded-pill">{{ s.count }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted mb-2">No resource collections configured</p>
+                        {% if user.is_staff %}
+                            <a href="{% url 'admin:resources_oersource_changelist' %}" class="btn btn-sm btn-outline-secondary">
+                                Configure Sources
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
         </div>
-      </div>
-    {% endif %}
-  </div>
+    </div>
+    
+    <!-- Right column: recent + breakdown with chart + maintenance -->
+    <div class="col-md-6 mb-4">
+        <div class="card mb-3 shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Recently Added Resources</h2>
+            </div>
+            <div class="card-body">
+                {% if recent_resources %}
+                    <ul class="list-group list-group-flush">
+                        {% for r in recent_resources %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <strong class="me-2">{{ r.title }}</strong>
+                                    {% if r.language != 'en' %}
+                                        {{ r.language|language_badge }}
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">
+                                    {{ r.source|source_badge }}
+                                    {% if r.created_at %} · {{ r.created_at|date:"Y-m-d" }}{% endif %}
+                                    {% if r.subject %} · {{ r.subject }}{% endif %}
+                                </small>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted mb-2">No resources indexed yet</p>
+                        <small class="text-muted">Run a harvest job to populate the collection</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Resource Type Visualization -->
+        <div class="card mb-3 shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Resource Types</h2>
+            </div>
+            <div class="card-body">
+                {% if type_counts %}
+                    anvas id="typeChart" width="400" height="250"></canvas>
+                {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted mb-0">No resource type data available</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Staff-only maintenance card -->
+        {% if user.is_staff %}
+            <div class="card border-warning shadow-sm">
+                <div class="card-header bg-warning bg-opacity-10">
+                    <h2 class="h5 mb-0">⚙️ Maintenance</h2>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">
+                        <strong>Enable AI search for new resources</strong><br>
+                        <small class="text-muted">
+                            Generate semantic embeddings to allow intelligent search matching. 
+                            This processes resource content to understand meaning beyond keywords.
+                        </small>
+                    </p>
+                    <a href="{% url 'resources:generate_embeddings' %}" class="btn btn-warning btn-sm">
+                        Process New Resources
+                    </a>
+                    <a href="{% url 'admin:resources_oerresource_changelist' %}" class="btn btn-outline-secondary btn-sm">
+                        View All Resources
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
 </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Resource Type Pie Chart
+{% if chart_data.type_labels %}
+const typeCtx = document.getElementById('typeChart');
+if (typeCtx) {
+    new Chart(typeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ chart_data.type_labels|safe }},
+            datasets: [{
+                data: {{ chart_data.type_data|safe }},
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(255, 206, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)',
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 10,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            let value = context.parsed || 0;
+                            let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            let percentage = ((value / total) * 100).toFixed(1);
+                            return label + ': ' + value + ' (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+{% endif %}
+</script>
 {% endblock %}
