@@ -68,16 +68,16 @@ TALIS_ITEMS_KEY = "dashboard_talis_item_analyses"
 
 def dashboard_view(request):
     """
-    Librarian-facing landing page with data visualizations.
+    Librarian-facing landing page.
+    
     Shows:
     - AI search hero (form posts to ai_search).
     - Talis Reading List analysis widget (CSV + URL, posts to talis_list_analyse_view).
     - Quick stats: recent resources, top subjects, resource type breakdown, sources.
-    - Data visualizations (Chart.js)
     """
     try:
         recent_resources = OERResource.objects.filter(is_active=True).order_by("-created_at")[:10]
-        
+
         top_subjects = (
             OERResource.objects.filter(is_active=True)
             .exclude(subject="")
@@ -85,69 +85,62 @@ def dashboard_view(request):
             .annotate(count=models.Count("id"))
             .order_by("-count")[:15]
         )
-        
+
         type_counts = (
             OERResource.objects.filter(is_active=True)
             .values("resource_type")
             .annotate(count=models.Count("id"))
             .order_by("-count")
         )
-        
-        sources = (
+
+        # Count sources with resources
+        sources_with_counts = (
             OERSource.objects.filter(is_active=True)
-            .annotate(count=models.Count("resources"))
-            .order_by("-count")[:10]
+            .annotate(count=models.Count('resources'))
+            .order_by('-count')
         )
+
+        # Prepare chart data for resource type breakdown
+        chart_labels = []
+        chart_data = []
+        chart_colors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+            '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+        ]
         
-        # Get total counts for stats cards
-        total_resources = OERResource.objects.filter(is_active=True).count()
-        distinct_subjects = OERResource.objects.filter(is_active=True).exclude(subject="").values("subject").distinct().count()
-        active_sources_count = OERSource.objects.filter(is_active=True).count()
-        
-        # Prepare data for Chart.js visualizations
-        # 1. Resource type breakdown (for pie chart)
-        type_labels = []
-        type_data = []
-        for t in type_counts:
-            label = t['resource_type'] if t['resource_type'] else 'Unspecified'
-            type_labels.append(label)
-            type_data.append(t['count'])
-        
-        # 2. Top subjects (for horizontal bar chart)
-        subject_labels = [s['subject'][:30] for s in top_subjects[:10]]  # Truncate long names
-        subject_data = [s['count'] for s in top_subjects[:10]]
-        
-        # 3. Collection sources (for doughnut chart)
-        source_labels = [s.get_display_name() if hasattr(s, 'get_display_name') else s.name for s in sources]
-        source_data = [s.count for s in sources]
-        
+        for idx, type_info in enumerate(type_counts):
+            resource_type = type_info['resource_type'] if type_info['resource_type'] else 'Unspecified'
+            chart_labels.append(resource_type)
+            chart_data.append(type_info['count'])
+
+        # Convert to JSON for JavaScript consumption
+        chart_labels_json = json.dumps(chart_labels)
+        chart_data_json = json.dumps(chart_data)
+        chart_colors_json = json.dumps(chart_colors[:len(chart_data)])
+
+        stats = {
+            'total_resources': OERResource.objects.filter(is_active=True).count(),
+            'distinct_subjects': OERResource.objects.filter(is_active=True).exclude(subject="").values('subject').distinct().count(),
+            'active_sources': sources_with_counts.count(),
+        }
+
         context = {
             "recent_resources": recent_resources,
             "top_subjects": top_subjects,
-            "type_counts": list(type_counts),
-            "sources": list(sources),
-            "stats": {
-                "total_resources": total_resources,
-                "distinct_subjects": distinct_subjects,
-                "active_sources": active_sources_count,
-            },
-            # Chart data
-            "chart_data": {
-                "type_labels": json.dumps(type_labels),
-                "type_data": json.dumps(type_data),
-                "subject_labels": json.dumps(subject_labels),
-                "subject_data": json.dumps(subject_data),
-                "source_labels": json.dumps(source_labels),
-                "source_data": json.dumps(source_data),
-            }
+            "type_counts": type_counts,
+            "sources": sources_with_counts,
+            "stats": stats,
+            "chart_labels": chart_labels_json,
+            "chart_data": chart_data_json,
+            "chart_colors": chart_colors_json,
         }
         
         return render(request, "resources/dashboard.html", context)
-        
+
     except Exception as e:
         logger.error(f"Error in dashboard_view: {str(e)}")
         messages.error(request, "An error occurred while loading the dashboard.")
-        return redirect('resources:home')
+        return redirect("resources:home")
 
 
 

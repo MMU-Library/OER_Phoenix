@@ -195,9 +195,7 @@
                                         </div>
                                         
                                         <div class="d-flex gap-2 align-items-center">
-                                            <a href="{{ r.resource.url }}" target="_blank" class="btn btn-sm btn-primary">
-                                                View Resource
-                                            </a>
+                                            {{ r.resource|link_type_button }}
                                             <small class="text-muted">
                                                 Semantic: {{ r.similarity_score|floatformat:2 }} | Quality: {{ r.quality_boost|floatformat:2 }}
                                             </small>
@@ -229,9 +227,7 @@
                                         <strong>License:</strong> {{ resource.license }}
                                     </small>
                                 </div>
-                                <a href="{{ resource.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                    View Resource
-                                </a>
+                                {{ resource|link_type_button }}
                             </div>
                         </div>
                     </div>

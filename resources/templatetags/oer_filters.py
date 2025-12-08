@@ -1,105 +1,163 @@
 from django import template
 from django.utils.safestring import mark_safe
+import re
 
 register = template.Library()
 
 @register.filter
 def star_rating(score):
-    """Convert 0-5 float to star rating HTML"""
-    if not score or score <= 0:
-        return mark_safe('<small class="text-muted">Not rated</small>')
+    """Convert quality score to star rating display"""
+    if not score or score == 0:
+        return mark_safe('<span class="text-muted">Not rated</span>')
     
-    full_stars = int(score)
-    half_star = (score - full_stars) >= 0.5
-    empty_stars = 5 - full_stars - (1 if half_star else 0)
+    stars = int(score)
+    half_star = (score - stars) >= 0.5
+    empty_stars = 5 - stars - (1 if half_star else 0)
     
-    html = '<span class="text-warning" title="{:.1f}/5.0">{}{}{}</span>'.format(
-        score,
-        '★' * full_stars,
-        '⯨' if half_star else '',
-        '☆' * empty_stars
-    )
+    html = '<span class="text-warning">'
+    html += '★' * stars
+    if half_star:
+        html += '½'
+    html += '<span class="text-muted">' + '☆' * empty_stars + '</span>'
+    html += f' <small>({score:.1f})</small></span>'
     return mark_safe(html)
 
 
 @register.filter
-def language_badge(lang_code):
-    """Return language badge HTML"""
-    if not lang_code or lang_code == 'en':
+def language_badge(language_code):
+    """Display language badge for non-English resources"""
+    if not language_code or language_code.lower() == 'en':
         return ''
     
-    lang_names = {
-        'no': 'Norwegian',
-        'da': 'Danish',
-        'de': 'German',
-        'fr': 'French',
+    language_names = {
         'es': 'Spanish',
-        'sv': 'Swedish',
-        'nl': 'Dutch',
+        'fr': 'French',
+        'de': 'German',
         'it': 'Italian',
         'pt': 'Portuguese',
+        'nl': 'Dutch',
+        'pl': 'Polish',
+        'ru': 'Russian',
+        'zh': 'Chinese',
+        'ja': 'Japanese',
+        'ko': 'Korean',
+        'ar': 'Arabic'
     }
     
-    lang_name = lang_names.get(lang_code.lower(), lang_code.upper())
-    html = f'<span class="badge bg-info text-dark" title="Resource in {lang_name}">{lang_code.upper()}</span>'
-    return mark_safe(html)
+    lang_name = language_names.get(language_code.lower(), language_code.upper())
+    return mark_safe(f'<span class="badge bg-info">{lang_name}</span>')
 
 
 @register.filter
 def source_badge(source):
-    """Return colored source badge"""
+    """Display colored badge for resource source"""
+    # Map sources to Bootstrap color classes
     source_colors = {
         'OAPEN': 'primary',
         'DOAB': 'success',
+        'OpenStax': 'info',
         'OER Commons': 'warning',
-        'OpenStax': 'danger',
-        'Skills Commons': 'secondary',
+        'MERLOT': 'secondary',
+        'MIT OCW': 'danger'
     }
     
-    display_name = source.get_display_name() if hasattr(source, 'get_display_name') else str(source)
+    source_name = source.display_name if hasattr(source, 'display_name') and source.display_name else source.name
+    color = source_colors.get(source_name, 'secondary')
     
-    # Match color by checking if any key is in display_name
-    color = 'secondary'
-    for key, col in source_colors.items():
-        if key.lower() in display_name.lower():
-            color = col
-            break
-    
-    html = f'<span class="badge bg-{color}">{display_name}</span>'
-    return mark_safe(html)
+    return mark_safe(f'<span class="badge bg-{color}">{source_name}</span>')
 
 
 @register.filter
 def match_reason_badge(reason):
-    """Return badge indicating why result matched"""
-    badges = {
-        'semantic': ('<span class="badge bg-primary" title="AI semantic match">🤖 AI Match</span>', 'AI semantic understanding'),
-        'keyword': ('<span class="badge bg-secondary" title="Keyword match">🔍 Keyword</span>', 'Keyword in title/description'),
-        'hybrid': ('<span class="badge bg-success" title="Strong match (AI + Keyword)">🎯 Strong Match</span>', 'Both AI and keyword match'),
+    """Display badge explaining why resource was matched"""
+    reason_labels = {
+        'semantic': ('Semantic Match', 'primary'),
+        'title': ('Title Match', 'success'),
+        'description': ('Description Match', 'info'),
+        'keyword': ('Keyword Match', 'warning'),
+        'combined': ('Combined Match', 'secondary')
     }
     
-    if not reason:
-        return ''
-    
-    if '|' in reason or 'hybrid' in reason:
-        return mark_safe(badges['hybrid'][0])
-    elif 'semantic' in reason:
-        return mark_safe(badges['semantic'][0])
-    else:
-        return mark_safe(badges['keyword'][0])
+    label, color = reason_labels.get(reason.lower(), (reason, 'secondary'))
+    return mark_safe(f'<span class="badge bg-{color}">{label}</span>')
 
 
 @register.simple_tag
 def translate_button(resource):
-    """Return a translate button for non-English resources"""
-    if resource.is_non_english() and not resource.title_en:
-        html = f'''
-        <button class="btn btn-sm btn-outline-secondary translate-btn" 
-                data-resource-id="{resource.id}" 
-                data-title="{resource.title}"
-                title="Translate title to English">
-            <small>Translate title</small>
-        </button>
-        '''
-        return mark_safe(html)
-    return ''
+    """Display translation button for non-English resources"""
+    if not resource or not hasattr(resource, 'needs_translation') or not resource.needs_translation():
+        return ''
+    
+    return mark_safe(
+        f'<button class="btn btn-sm btn-outline-secondary" '
+        f'onclick="translateResource({resource.id})" title="Translate to English">'
+        f'<i class="bi bi-translate"></i> Translate</button>'
+    )
+
+
+@register.filter
+def link_type_button(resource):
+    """
+    Generate appropriate button text and icon based on link type.
+    Detects PDFs, web pages, and other formats for librarian-friendly display.
+    """
+    if not resource or not hasattr(resource, 'url'):
+        return mark_safe('<span class="btn btn-sm btn-secondary disabled">No Link</span>')
+    
+    url = resource.url.lower()
+    format_field = resource.format.lower() if hasattr(resource, 'format') and resource.format else ''
+    
+    # Detect PDF downloads
+    if '.pdf' in url or 'pdf' in format_field or url.endswith('.pdf'):
+        icon = '📄'
+        text = 'Download PDF'
+        btn_class = 'btn-danger'
+        title = 'Direct PDF download'
+    
+    # Detect EPUB/ebook formats
+    elif '.epub' in url or 'epub' in format_field:
+        icon = '📖'
+        text = 'Download E-book'
+        btn_class = 'btn-info'
+        title = 'E-book format (EPUB)'
+    
+    # Detect video content
+    elif any(vid in url or vid in format_field for vid in ['youtube.com', 'vimeo.com', 'video', '.mp4', '.webm']):
+        icon = '🎬'
+        text = 'View Video'
+        btn_class = 'btn-dark'
+        title = 'Video resource'
+    
+    # Detect DOI links (scholarly articles)
+    elif 'doi.org' in url or 'dx.doi.org' in url:
+        icon = '🔗'
+        text = 'View Article (DOI)'
+        btn_class = 'btn-success'
+        title = 'Academic article via DOI'
+    
+    # Detect archive.org links
+    elif 'archive.org' in url:
+        icon = '📚'
+        text = 'View on Archive.org'
+        btn_class = 'btn-warning'
+        title = 'Internet Archive resource'
+    
+    # Detect repository/institutional pages
+    elif any(repo in url for repo in ['repository', 'oer', 'dspace', 'eprints']):
+        icon = '🗃️'
+        text = 'View in Repository'
+        btn_class = 'btn-primary'
+        title = 'Institutional repository'
+    
+    # Default: web page
+    else:
+        icon = '🌐'
+        text = 'View Web Page'
+        btn_class = 'btn-outline-primary'
+        title = 'External web page'
+    
+    return mark_safe(
+        f'<a href="{resource.url}" target="_blank" rel="noopener noreferrer" '
+        f'class="btn btn-sm {btn_class}" title="{title}">'
+        f'{icon} {text}</a>'
+    )

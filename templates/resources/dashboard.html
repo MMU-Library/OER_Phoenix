@@ -169,51 +169,32 @@
         </div>
     </div>
     
-    <!-- Right column: recent + breakdown with chart + maintenance -->
+    <!-- Right column: resource type breakdown + maintenance -->
     <div class="col-md-6 mb-4">
         <div class="card mb-3 shadow-sm">
             <div class="card-header">
-                <h2 class="h5 mb-0">Recently Added Resources</h2>
+                <h2 class="h5 mb-0">Resource Breakdown by Type</h2>
             </div>
             <div class="card-body">
-                {% if recent_resources %}
+                {% if type_counts %}
+                    <!-- Chart Canvas -->
+                    <div class="mb-3" style="height: 300px;">
+                        anvas id="resourceTypeChart"></canvas>
+                    </div>
+                    
+                    <!-- Data Table -->
                     <ul class="list-group list-group-flush">
-                        {% for r in recent_resources %}
-                            <li class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <strong class="me-2">{{ r.title }}</strong>
-                                    {% if r.language != 'en' %}
-                                        {{ r.language|language_badge }}
-                                    {% endif %}
-                                </div>
-                                <small class="text-muted">
-                                    {{ r.source|source_badge }}
-                                    {% if r.created_at %} · {{ r.created_at|date:"Y-m-d" }}{% endif %}
-                                    {% if r.subject %} · {{ r.subject }}{% endif %}
-                                </small>
+                        {% for t in type_counts %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ t.resource_type|default:"(unspecified)" }}
+                                <span class="badge bg-secondary rounded-pill">{{ t.count }}</span>
                             </li>
                         {% endfor %}
                     </ul>
                 {% else %}
                     <div class="text-center py-3">
-                        <p class="text-muted mb-2">No resources indexed yet</p>
-                        <small class="text-muted">Run a harvest job to populate the collection</small>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- Resource Type Visualization -->
-        <div class="card mb-3 shadow-sm">
-            <div class="card-header">
-                <h2 class="h5 mb-0">Resource Types</h2>
-            </div>
-            <div class="card-body">
-                {% if type_counts %}
-                    anvas id="typeChart" width="400" height="250"></canvas>
-                {% else %}
-                    <div class="text-center py-3">
-                        <p class="text-muted mb-0">No resource type data available</p>
+                        <p class="text-muted mb-0">No resource type data available yet</p>
+                        <small class="text-muted">Data will appear after harvest jobs complete</small>
                     </div>
                 {% endif %}
             </div>
@@ -244,44 +225,45 @@
         {% endif %}
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Resource Type Pie Chart
-{% if chart_data.type_labels %}
-const typeCtx = document.getElementById('typeChart');
-if (typeCtx) {
-    new Chart(typeCtx, {
+// Resource Type Breakdown Chart
+{% if chart_labels and chart_data %}
+const ctx = document.getElementById('resourceTypeChart');
+if (ctx) {
+    new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: {{ chart_data.type_labels|safe }},
+            labels: {{ chart_labels|safe }},
             datasets: [{
-                data: {{ chart_data.type_data|safe }},
-                backgroundColor: [
-                    'rgba(54, 162, 235, 0.8)',
-                    'rgba(255, 99, 132, 0.8)',
-                    'rgba(255, 206, 86, 0.8)',
-                    'rgba(75, 192, 192, 0.8)',
-                    'rgba(153, 102, 255, 0.8)',
-                    'rgba(255, 159, 64, 0.8)',
-                ],
+                label: 'Resources by Type',
+                data: {{ chart_data|safe }},
+                backgroundColor: {{ chart_colors|safe }},
                 borderWidth: 2,
-                borderColor: '#fff'
+                borderColor: '#ffffff'
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
                     position: 'bottom',
                     labels: {
+                        boxWidth: 12,
                         padding: 10,
                         font: {
-                            size: 12
+                            size: 11
                         }
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Collection Overview',
+                    font: {
+                        size: 14
                     }
                 },
                 tooltip: {
