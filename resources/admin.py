@@ -22,6 +22,7 @@ from resources.harvesters.csv_harvester import CSVHarvester
 from resources.harvesters.marcxml_harvester import MARCXMLHarvester
 from resources.forms import OERSourceForm  # Import the unified form
 from resources.services import ai_utils  # NEW: for embedding generation
+from resources.services import metadata_enricher
 
 
 # ---------------------------------------------------------------------------- #
@@ -419,6 +420,26 @@ class HarvestJobAdmin(admin.ModelAdmin):
 #                               OER Resource Admin                             #
 # ---------------------------------------------------------------------------- #
 
+@admin.action(description="Enrich metadata for selected resources (AI-assisted)")
+def enrich_metadata_action(modeladmin, request, queryset):
+    results = metadata_enricher.enrich_queryset(queryset)
+    updated = sum(1 for r in results if r.updated_fields)
+    skipped = sum(1 for r in results if r.skipped)
+    failed = sum(1 for r in results if r.error)
+
+    msg_parts = []
+    if updated:
+        msg_parts.append(f"{updated} updated")
+    if skipped:
+        msg_parts.append(f"{skipped} skipped (already rich metadata)")
+    if failed:
+        msg_parts.append(f"{failed} failed")
+
+    messages.info(
+        request,
+        "Metadata enrichment: " + ", ".join(msg_parts) if msg_parts else "No changes made.",
+    )
+
 @admin.register(OERResource)
 class OERResourceAdmin(admin.ModelAdmin):
     list_display = [
@@ -450,6 +471,7 @@ class OERResourceAdmin(admin.ModelAdmin):
         generate_embeddings_action,
         run_quality_assessment_action,
         run_quality_assessment_all_action,
+        enrich_metadata_action, 
     ]
 
     def url_display(self, obj):

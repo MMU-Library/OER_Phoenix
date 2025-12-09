@@ -127,28 +127,56 @@
 
                 <!-- Results Column -->
                 <div class="col-md-9">
+
+                    {% if detailed_results %}
+                    <div class="alert alert-info py-2 small">
+                        <strong>About these results:</strong>
+                        “AI confidence” uses semantic similarity between your query and resource content, while “Quality” is an internal 0–5 rating (shown as a percentage) based on metadata richness and pedagogic fitness.
+                    </div>
+                    {% endif %}
+
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h2 class="mb-0">AI Search Results ({{ detailed_results|length }})</h2>
-                        
-                        <div class="d-flex gap-2">
-                            <!-- Sort Dropdown -->
-                            <select class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()" name="sort">
-                                <option value="relevance" {% if sort_by == 'relevance' %}selected{% endif %}>Relevance</option>
-                                <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest First</option>
-                                <option value="quality" {% if sort_by == 'quality' %}selected{% endif %}>Highest Quality</option>
-                                <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Title A-Z</option>
-                            </select>
-                            
-                            <!-- Export Button -->
+
+                        <div class="d-flex gap-2 align-items-center">
+
+                            <form method="get" action="{% url 'resources:ai_search' %}" class="d-flex gap-2">
+                                <input type="hidden" name="query" value="{{ query }}">
+
+                                {% for s in applied_filters.sources %}
+                                    <input type="hidden" name="source" value="{{ s }}">
+                                {% endfor %}
+                                {% for l in applied_filters.languages %}
+                                    <input type="hidden" name="language" value="{{ l }}">
+                                {% endfor %}
+                                {% for t in applied_filters.resource_types %}
+                                    <input type="hidden" name="resource_type" value="{{ t }}">
+                                {% endfor %}
+                                {% for subj in applied_filters.subjects %}
+                                    <input type="hidden" name="subject" value="{{ subj }}">
+                                {% endfor %}
+
+                                <select class="form-select form-select-sm"
+                                        style="width: auto;"
+                                        name="sort"
+                                        onchange="this.form.submit()">
+                                    <option value="relevance" {% if sort_by == 'relevance' %}selected{% endif %}>Relevance</option>
+                                    <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest First</option>
+                                    <option value="quality" {% if sort_by == 'quality' %}selected{% endif %}>Highest Quality</option>
+                                    <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Title A-Z</option>
+                                </select>
+                            </form>
+
                             <form method="post" action="{% url 'resources:search_export_talis' %}" class="d-inline">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-outline-secondary btn-sm">
                                     Export as Talis CSV
                                 </button>
                             </form>
+
                         </div>
                     </div>
-
+                    
                     <!-- Results Grid -->
                     <div class="row">
                         {% for r in detailed_results %}
@@ -163,16 +191,42 @@
                                                         {{ r.resource.language|language_badge }}
                                                     {% endif %}
                                                 </h5>
-                                                <div class="mb-2">
+
+                                                <div class="mb-2 d-flex flex-wrap align-items-center gap-1">
                                                     {{ r.resource.source|source_badge }}
                                                     {{ r.match_reason|match_reason_badge }}
-                                                    {% if r.resource.overall_quality_score > 0 %}
-                                                        {{ r.resource.overall_quality_score|star_rating }}
+
+                                                    {% if r.resource.overall_quality_score %}
+                                                        {% with percent=r.resource.overall_quality_score|multiply:20 %}
+                                                            <span class="badge quality-badge 
+                                                                {% if percent >= 80 %}quality-high
+                                                                {% elif percent >= 40 %}quality-medium
+                                                                {% else %}quality-low
+                                                                {% endif %}"
+                                                                  data-bs-toggle="tooltip"
+                                                                  title="Quality score is based on an internal 0–5 rating (shown here as a percentage). It reflects metadata richness, clarity, and pedagogic suitability.">
+                                                                Quality: {{ percent|floatformat:0 }}%
+                                                            </span>
+                                                        {% endwith %}
+                                                    {% else %}
+                                                        <span class="badge bg-secondary"
+                                                              data-bs-toggle="tooltip"
+                                                              title="This resource has not yet been assessed by the quality checker.">
+                                                            Quality: Not rated
+                                                        </span>
+                                                    {% endif %}
+
+                                                    {% if r.similarity_score %}
+                                                        <span class="badge bg-info text-dark"
+                                                              data-bs-toggle="tooltip"
+                                                              title="AI confidence shows how closely this resource’s content matches your query, using semantic similarity rather than keywords alone.">
+                                                            AI confidence: {{ r.similarity_score|floatformat:2 }}
+                                                        </span>
                                                     {% endif %}
                                                 </div>
                                             </div>
                                             <div class="text-end ms-3">
-                                                <div class="badge bg-primary" title="Final relevance score">
+                                                <div class="badge bg-primary" title="Final combined score used for ranking.">
                                                     Score: {{ r.final_score|floatformat:2 }}
                                                 </div>
                                             </div>
@@ -196,9 +250,6 @@
                                         
                                         <div class="d-flex gap-2 align-items-center">
                                             {{ r.resource|link_type_button }}
-                                            <small class="text-muted">
-                                                Semantic: {{ r.similarity_score|floatformat:2 }} | Quality: {{ r.quality_boost|floatformat:2 }}
-                                            </small>
                                         </div>
                                     </div>
                                 </div>
@@ -257,5 +308,12 @@ document.querySelectorAll('#filter-form input[type="checkbox"]').forEach(checkbo
         document.getElementById('filter-form').submit();
     });
 });
+
+// Enable Bootstrap tooltips for score badges
+document.addEventListener('DOMContentLoaded', function () {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].forEach(el => new bootstrap.Tooltip(el));
+});
 </script>
 {% endblock %}
+

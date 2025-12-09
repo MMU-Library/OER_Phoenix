@@ -343,93 +343,112 @@ def _store_analysis_in_session(request, analysis_result) -> None:
 # Search Views
 def ai_search(request):
     """
-    Enhanced AI-powered search with filtering, faceting, and sorting
+    AI-powered search with:
+    - Hybrid (keyword + semantic) ranking via OERSearchEngine
+    - Faceted filters (source, language, resource_type, subject)
+    - Sort options (relevance, newest, quality, etc.)
     """
     try:
-        # Get query from POST or GET
-        query = request.POST.get('query', request.GET.get('query', '')).strip()
-        sort_by = request.GET.get('sort', 'relevance')
-        
-        # Collect applied filters from GET parameters
+        # 1. Determine query and sort
+        raw_query = request.POST.get("query", request.GET.get("query", ""))
+        query = (raw_query or "").strip()
+        sort_by = request.GET.get("sort", "relevance")
+
+        # 2. Collect applied filters from GET parameters
         applied_filters = {
-            'sources': request.GET.getlist('source'),
-            'languages': request.GET.getlist('language'),
-            'resource_types': request.GET.getlist('resource_type'),
-            'subjects': request.GET.getlist('subject'),
+            "sources": request.GET.getlist("source"),
+            "languages": request.GET.getlist("language"),
+            "resource_types": request.GET.getlist("resource_type"),
+            "subjects": request.GET.getlist("subject"),
         }
-        
-        # Build filter dict for search engine
-        search_filters = {}
-        if applied_filters['sources']:
-            search_filters['source'] = applied_filters['sources']
-        if applied_filters['languages']:
-            search_filters['language'] = applied_filters['languages']
-        if applied_filters['resource_types']:
-            search_filters['resource_type'] = applied_filters['resource_types']
-        if applied_filters['subjects']:
-            search_filters['subject'] = applied_filters['subjects']
-        
+
+        # Translate applied_filters into engine-friendly filter dict
+        search_filters: dict[str, list[str]] = {}
+        if applied_filters["sources"]:
+            search_filters["source"] = applied_filters["sources"]
+        if applied_filters["languages"]:
+            search_filters["language"] = applied_filters["languages"]
+        if applied_filters["resource_types"]:
+            search_filters["resource_type"] = applied_filters["resource_types"]
+        if applied_filters["subjects"]:
+            search_filters["subject"] = applied_filters["subjects"]
+
         detailed_results = []
         facets = {}
-        
+
         if query:
             from .services.search_engine import OERSearchEngine
+
             engine = OERSearchEngine()
-            
-            # Perform hybrid search with filters
+
+            # 3. Hybrid search with optional filters
             results = engine.hybrid_search(
                 query=query,
-                filters=search_filters if search_filters else None,
-                limit=50
+                filters=search_filters or None,
+                limit=50,
             )
-            
-            # Apply sorting
+
+            # 4. Apply chosen sort
             results = engine.sort_results(results, sort_by=sort_by)
-            
-            # Get facets for filtering sidebar
+
+            # 5. Build facets for sidebar (always pass a dict, no None)
             facets = engine.get_facets(
                 query=query,
-                applied_filters=search_filters if search_filters else None
+                applied_filters=search_filters,
             )
-            
+
             detailed_results = results
-            
-            # Store in session for export
-            request.session['last_search_results'] = [
-                {
-                    'id': getattr(r.resource, 'id', None),
-                    'title': getattr(r.resource, 'title', ''),
-                    'url': getattr(r.resource, 'url', ''),
-                    'score': float(r.final_score),
-                    'source': getattr(r.resource.source, 'name', ''),
-                }
-                for r in results
-            ]
-        
+
+            # 6. Store light-weight snapshot for Talis/export use
+            last_search_results = []
+            for r in results:
+                resource = getattr(r, "resource", None)
+                source_name = ""
+                if resource and getattr(resource, "source", None):
+                    source_name = getattr(resource.source, "name", "") or ""
+
+                last_search_results.append(
+                    {
+                        "id": getattr(resource, "id", None) if resource else None,
+                        "title": getattr(resource, "title", "") if resource else "",
+                        "url": getattr(resource, "url", "") if resource else "",
+                        "final_score": float(getattr(r, "final_score", 0.0)),
+                        "source": source_name,
+                    }
+                )
+
+            request.session["last_search_results"] = last_search_results
+
         context = {
-            'query': query,
-            'detailed_results': detailed_results,
-            'facets': facets,
-            'applied_filters': applied_filters,
-            'sort_by': sort_by,
-            'ai_search': True
+            "query": query,
+            "detailed_results": detailed_results,
+            "facets": facets,
+            "applied_filters": applied_filters,
+            "sort_by": sort_by,
+            "ai_search": True,
         }
-        
         return render(request, TEMPLATE_SEARCH, context)
-        
+
     except Exception as e:
         logger.error(f"Error in ai_search: {str(e)}")
-        messages.error(request, f"An error occurred during the search: {str(e)}")
-        return render(request, TEMPLATE_SEARCH, {
-            'query': '',
-            'detailed_results': [],
-            'facets': {},
-            'applied_filters': {'sources': [], 'languages': [], 'resource_types': [], 'subjects': []},
-            'sort_by': 'relevance',
-            'ai_search': True
-        })
-
-
+        messages.error(request, "An error occurred during the search.")
+        return render(
+            request,
+            TEMPLATE_SEARCH,
+            {
+                "query": "",
+                "detailed_results": [],
+                "facets": {},
+                "applied_filters": {
+                    "sources": [],
+                    "languages": [],
+                    "resource_types": [],
+                    "subjects": [],
+                },
+                "sort_by": "relevance",
+                "ai_search": True,
+            },
+        )
 
 def compare_view(request):
     """View for comparing multiple OER resources"""
