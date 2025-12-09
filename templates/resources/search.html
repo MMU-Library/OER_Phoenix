@@ -247,7 +247,9 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
 // Auto-submit form when filters change
 document.querySelectorAll('#filter-form input[type="checkbox"]').forEach(checkbox => {
@@ -256,5 +258,4 @@ document.querySelectorAll('#filter-form input[type="checkbox"]').forEach(checkbo
     });
 });
 </script>
-
 {% endblock %}

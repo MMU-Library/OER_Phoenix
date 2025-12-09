@@ -31,8 +31,8 @@ class QualityAssessmentService:
         scores = {
             'metadata_completeness': self.calculate_metadata_score(resource),
             'accessibility': self.check_accessibility_compliance(resource),
-            'license_clarity': self.verify_license(resource.license),
-            'content_freshness': self.assess_recency(resource.last_updated),
+            'license_clarity': self.verify_license(resource.license if resource.license else ""),
+            'content_freshness': self.assess_recency(getattr(resource, 'updated_at', None)),  # CHANGED
             'url_validity': self.verify_url(resource.url),
         }
         
@@ -41,8 +41,9 @@ class QualityAssessmentService:
         
         return {
             **scores,
-            'overall': overall
+            'overall_score': overall  # CHANGED to match what admin expects
         }
+
     
     def calculate_metadata_score(self, resource) -> float:
         """
@@ -62,17 +63,17 @@ class QualityAssessmentService:
         
         # Recommended fields (medium weight)
         recommended_checks = [
-            (bool(resource.subject_area), 0.10, "subject_area"),
-            (bool(resource.educational_level), 0.10, "educational_level"),
+            (bool(getattr(resource, 'subject', None)), 0.10, "subject"),  # CHANGED
+            (bool(getattr(resource, 'level', None)), 0.10, "level"),  # CHANGED
             (bool(resource.publisher), 0.08, "publisher"),
-            (bool(resource.learning_objectives), 0.08, "learning_objectives"),
+            (bool(getattr(resource, 'author', None)), 0.08, "author"),  # CHANGED
         ]
         
         # Enhanced fields (lower weight)
         enhanced_checks = [
-            (bool(resource.keywords), 0.07, "keywords"),
-            (bool(resource.version), 0.05, "version"),
-            (len(resource.description) > 500, 0.02, "detailed_description"),
+            (bool(getattr(resource, 'keywords', None)), 0.07, "keywords"),  # CHANGED
+            (bool(getattr(resource, 'resource_type', None)), 0.05, "resource_type"),  # CHANGED
+            (len(resource.description) > 500 if resource.description else False, 0.02, "detailed_description"),
         ]
         
         all_checks = required_checks + recommended_checks + enhanced_checks
@@ -83,6 +84,7 @@ class QualityAssessmentService:
                 score += weight
         
         return round(score / total_weight if total_weight > 0 else 0, 3)
+
     
     def check_accessibility_compliance(self, resource) -> float:
         """

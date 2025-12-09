@@ -99,7 +99,7 @@ class PresetOAIPMHConfigs:
             'name': 'DOAB OAI-PMH',
             'description': 'Directory of Open Access Books via OAI-PMH',
             'oaipmh_url': 'https://www.doabooks.org/oaipmh',
-            'oaipmh_set_spec': 'public',
+            'oaipmh_set_spec': '',
             'harvest_schedule': 'daily',
             'max_resources_per_harvest': 1000
         }

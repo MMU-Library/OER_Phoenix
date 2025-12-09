@@ -57,6 +57,95 @@ def generate_embeddings_action(modeladmin, request, queryset):
         )
 
 
+@admin.action(description="Run quality assessment for selected resources")
+def run_quality_assessment_action(modeladmin, request, queryset):
+    """
+    Admin action to run quality assessment for selected OERResource instances.
+    """
+    from resources.services.quality_assessment import QualityAssessmentService
+    
+    qa_service = QualityAssessmentService()
+    updated = 0
+    failed = 0
+    
+    for resource in queryset:
+        try:
+            result = qa_service.assess_resource(resource)
+            resource.overall_quality_score = result['overall_score']
+            resource.save(update_fields=['overall_quality_score'])
+            updated += 1
+        except Exception as e:
+            failed += 1
+            modeladmin.message_user(
+                request,
+                f"Failed to assess {resource.title}: {str(e)}",
+                level=messages.ERROR
+            )
+    
+    if failed > 0:
+        modeladmin.message_user(
+            request,
+            f"Assessed {updated} resources. {failed} failed.",
+            level=messages.WARNING
+        )
+    else:
+        modeladmin.message_user(
+            request,
+            f"Successfully assessed {updated} resources.",
+            level=messages.SUCCESS
+        )
+
+
+@admin.action(description="Run quality assessment for ALL resources (batch)")
+def run_quality_assessment_all_action(modeladmin, request, queryset):
+    """
+    Admin action to run quality assessment for ALL resources in the database.
+    This ignores the selection and processes everything.
+    """
+    from resources.services.quality_assessment import QualityAssessmentService
+    
+    qa_service = QualityAssessmentService()
+    
+    # Get all resources that need assessment (either no score or outdated)
+    all_resources = OERResource.objects.filter(overall_quality_score__isnull=True) | \
+                    OERResource.objects.filter(overall_quality_score__lt=0)
+    
+    total = all_resources.count()
+    
+    if total == 0:
+        modeladmin.message_user(
+            request,
+            "All resources already have quality scores.",
+            level=messages.INFO
+        )
+        return
+    
+    updated = 0
+    failed = 0
+    
+    for resource in all_resources:
+        try:
+            result = qa_service.assess_resource(resource)
+            resource.overall_quality_score = result['overall_score']
+            resource.save(update_fields=['overall_quality_score'])
+            updated += 1
+        except Exception as e:
+            failed += 1
+    
+    if failed > 0:
+        modeladmin.message_user(
+            request,
+            f"Batch assessment complete: {updated}/{total} successful, {failed} failed.",
+            level=messages.WARNING
+        )
+    else:
+        modeladmin.message_user(
+            request,
+            f"Batch assessment complete: All {updated} resources assessed successfully.",
+            level=messages.SUCCESS
+        )
+
+
 # ---------------------------------------------------------------------------- #
 #                               Inline Admin                                    #
 # ---------------------------------------------------------------------------- #
@@ -311,7 +400,7 @@ class HarvestJobAdmin(admin.ModelAdmin):
             minutes, seconds = divmod(total_seconds, 60)
             return f"{minutes}m {seconds}s"
         return mark_safe('<em>In progress...</em>')
-    duration_display.short_description = 'Duration'
+        duration_display.short_description = 'Duration'
 
     def results_summary(self, obj):
         return format_html(
@@ -339,7 +428,7 @@ class OERResourceAdmin(admin.ModelAdmin):
         'url_display',
         'resource_type',
         'overall_quality_score',
-        'has_embedding',  # Shows embedding status in list
+        'has_embedding',
     ]
     list_filter = [
         'source',
@@ -350,15 +439,18 @@ class OERResourceAdmin(admin.ModelAdmin):
     ]
     search_fields = ['title', 'description', 'publisher', 'author']
     readonly_fields = [
-        # Remove 'content_embedding' from here
         'created_at',
         'updated_at',
         'last_verified',
         'overall_quality_score',
-        'embedding_status',  # NEW: add a human-readable status instead
+        'embedding_status',
     ]
     list_per_page = 50
-    actions = [generate_embeddings_action]
+    actions = [
+        generate_embeddings_action,
+        run_quality_assessment_action,
+        run_quality_assessment_all_action,
+    ]
 
     def url_display(self, obj):
         return format_html('<a href="{}" target="_blank">🔗 View</a>', obj.url)
@@ -395,7 +487,7 @@ class OERResourceAdmin(admin.ModelAdmin):
         ('Metadata', {
             'fields': (
                 'is_active',
-                'embedding_status',  # Changed from content_embedding
+                'embedding_status',
                 'created_at',
                 'updated_at',
                 'last_verified',

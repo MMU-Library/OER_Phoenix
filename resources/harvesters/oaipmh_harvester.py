@@ -37,6 +37,8 @@ class OAIHarvester(BaseHarvester):
         title = None
         identifiers = []
         description = None
+        resource_type = None  # NEW
+        
         for elem in record_xml.findall('.//{http://purl.org/dc/elements/1.1/}title'):
             if elem.text:
                 title = elem.text
@@ -46,7 +48,7 @@ class OAIHarvester(BaseHarvester):
             t = record_xml.find('.//title')
             if t is not None and t.text:
                 title = t.text
-
+        
         for elem in record_xml.findall('.//{http://purl.org/dc/elements/1.1/}identifier'):
             if elem.text:
                 identifiers.append(elem.text)
@@ -55,7 +57,7 @@ class OAIHarvester(BaseHarvester):
             for elem in record_xml.findall('.//identifier'):
                 if elem.text:
                     identifiers.append(elem.text)
-
+        
         for elem in record_xml.findall('.//{http://purl.org/dc/elements/1.1/}description'):
             if elem.text:
                 description = elem.text
@@ -64,13 +66,27 @@ class OAIHarvester(BaseHarvester):
             d = record_xml.find('.//description')
             if d is not None and d.text:
                 description = d.text
-
-        url = identifiers[0] if identifiers else None
+        
+        # NEW: Extract resource type from dc:type
+        for elem in record_xml.findall('.//{http://purl.org/dc/elements/1.1/}type'):
+            if elem.text:
+                resource_type = elem.text
+                break
+        if not resource_type:
+            # try any type-like tag
+            t = record_xml.find('.//type')
+            if t is not None and t.text:
+                resource_type = t.text
+        
+        url = identifiers if identifiers else None
+        
         return {
             'title': title,
             'url': url,
-            'description': description
+            'description': description,
+            'resource_type': resource_type  # NEW
         }
+
 
     def fetch_and_process_records(self):
         config = self._get_config()

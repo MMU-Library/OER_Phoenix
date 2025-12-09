@@ -104,46 +104,54 @@ def link_type_button(resource):
     if not resource or not hasattr(resource, 'url'):
         return mark_safe('<span class="btn btn-sm btn-secondary disabled">No Link</span>')
     
-    url = resource.url.lower()
+    url = resource.url
+    if not url:
+        return mark_safe('<span class="btn btn-sm btn-secondary disabled">No Link</span>')
+    
+    # Ensure URL has protocol
+    if not url.startswith(('http://', 'https://', 'ftp://')):
+        url = 'https://' + url
+    
+    url_lower = url.lower()
     format_field = resource.format.lower() if hasattr(resource, 'format') and resource.format else ''
     
     # Detect PDF downloads
-    if '.pdf' in url or 'pdf' in format_field or url.endswith('.pdf'):
+    if '.pdf' in url_lower or 'pdf' in format_field or url_lower.endswith('.pdf'):
         icon = '📄'
         text = 'Download PDF'
         btn_class = 'btn-danger'
         title = 'Direct PDF download'
     
     # Detect EPUB/ebook formats
-    elif '.epub' in url or 'epub' in format_field:
+    elif '.epub' in url_lower or 'epub' in format_field:
         icon = '📖'
         text = 'Download E-book'
         btn_class = 'btn-info'
         title = 'E-book format (EPUB)'
     
     # Detect video content
-    elif any(vid in url or vid in format_field for vid in ['youtube.com', 'vimeo.com', 'video', '.mp4', '.webm']):
+    elif any(vid in url_lower or vid in format_field for vid in ['youtube.com', 'vimeo.com', 'video', '.mp4', '.webm']):
         icon = '🎬'
         text = 'View Video'
         btn_class = 'btn-dark'
         title = 'Video resource'
     
     # Detect DOI links (scholarly articles)
-    elif 'doi.org' in url or 'dx.doi.org' in url:
+    elif 'doi.org' in url_lower or 'dx.doi.org' in url_lower:
         icon = '🔗'
         text = 'View Article (DOI)'
         btn_class = 'btn-success'
         title = 'Academic article via DOI'
     
     # Detect archive.org links
-    elif 'archive.org' in url:
+    elif 'archive.org' in url_lower:
         icon = '📚'
         text = 'View on Archive.org'
         btn_class = 'btn-warning'
         title = 'Internet Archive resource'
     
     # Detect repository/institutional pages
-    elif any(repo in url for repo in ['repository', 'oer', 'dspace', 'eprints']):
+    elif any(repo in url_lower for repo in ['repository', 'oer', 'dspace', 'eprints', 'oapen', 'doab']):
         icon = '🗃️'
         text = 'View in Repository'
         btn_class = 'btn-primary'
@@ -152,12 +160,12 @@ def link_type_button(resource):
     # Default: web page
     else:
         icon = '🌐'
-        text = 'View Web Page'
+        text = 'View Resource'
         btn_class = 'btn-outline-primary'
         title = 'External web page'
     
     return mark_safe(
-        f'<a href="{resource.url}" target="_blank" rel="noopener noreferrer" '
+        f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
         f'class="btn btn-sm {btn_class}" title="{title}">'
         f'{icon} {text}</a>'
     )
