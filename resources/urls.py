@@ -19,6 +19,7 @@ urlpatterns = [
     # Search and comparison - use resources templates
     path('search/', views.ai_search, name='ai_search'),
     path('compare/', views.compare_view, name='compare_resources'),
+    path("advanced-search/", views.advanced_search, name="advanced_search"),
 
     # CSV operations - mixed templates
     path('download-csv/', views.csv_download, name='csv_download'),

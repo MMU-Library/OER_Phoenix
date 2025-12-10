@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+
+{% block title %}Advanced Search - OER Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-12">
+    <h1 class="mb-3">Advanced Search</h1>
+    <p class="text-muted mb-4">
+      Combine multiple fields and identifiers (ISBN, ISSN, OCLC) for precise searching.
+    </p>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-9 mb-4">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h2 class="h5 mb-0">Build your search</h2>
+      </div>
+      <div class="card-body">
+        <form method="get" action="{% url 'resources:advanced_search' %}">
+          {# Row 1 #}
+          <div class="row g-2 align-items-center mb-2">
+            <div class="col-md-3">
+              <span class="form-text">Search for</span>
+            </div>
+            <div class="col-md-5">
+              <input type="text" name="q1" class="form-control"
+                     value="{{ request.GET.q1 }}"
+                     placeholder="Enter search terms">
+            </div>
+            <div class="col-md-4">
+              <select name="f1" class="form-select">
+                <option value="any">Any field</option>
+                <option value="title">Title</option>
+                <option value="author">Author / Creator</option>
+                <option value="subject">Subject / Keywords</option>
+                <option value="isbn">ISBN</option>
+                <option value="issn">ISSN</option>
+                <option value="oclc">OCLC number</option>
+              </select>
+            </div>
+          </div>
+
+          {# Row 2 #}
+          <div class="row g-2 align-items-center mb-2">
+            <div class="col-md-3">
+              <select name="op2" class="form-select form-select-sm">
+                <option value="AND">AND</option>
+                <option value="OR">OR</option>
+                <option value="NOT">NOT</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <input type="text" name="q2" class="form-control"
+                     value="{{ request.GET.q2 }}"
+                     placeholder="Optional second line">
+            </div>
+            <div class="col-md-4">
+              <select name="f2" class="form-select">
+                <option value="any">Any field</option>
+                <option value="title">Title</option>
+                <option value="author">Author / Creator</option>
+                <option value="subject">Subject / Keywords</option>
+                <option value="isbn">ISBN</option>
+                <option value="issn">ISSN</option>
+                <option value="oclc">OCLC number</option>
+              </select>
+            </div>
+          </div>
+
+          {# Row 3 #}
+          <div class="row g-2 align-items-center mb-3">
+            <div class="col-md-3">
+              <select name="op3" class="form-select form-select-sm">
+                <option value="AND">AND</option>
+                <option value="OR">OR</option>
+                <option value="NOT">NOT</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <input type="text" name="q3" class="form-control"
+                     value="{{ request.GET.q3 }}"
+                     placeholder="Optional third line">
+            </div>
+            <div class="col-md-4">
+              <select name="f3" class="form-select">
+                <option value="any">Any field</option>
+                <option value="title">Title</option>
+                <option value="author">Author / Creator</option>
+                <option value="subject">Subject / Keywords</option>
+                <option value="isbn">ISBN</option>
+                <option value="issn">ISSN</option>
+                <option value="oclc">OCLC number</option>
+              </select>
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Resource type</label>
+              <select name="adv_resource_type" class="form-select">
+                <option value="">Any type</option>
+                <option value="Textbook">Textbook</option>
+                <option value="Article">Article</option>
+                <option value="Video">Video</option>
+                <option value="Course">Course / Module</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Language</label>
+              <select name="adv_language" class="form-select">
+                <option value="">Any language</option>
+                <option value="en">English</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                {# extend as needed #}
+              </select>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <div>
+              <button type="submit" class="btn btn-primary">
+                Search
+              </button>
+              <a href="{% url 'resources:advanced_search' %}" class="btn btn-outline-secondary">
+                Reset
+              </a>
+            </div>
+            <a href="{% url 'resources:ai_search' %}" class="btn btn-link btn-sm">
+              Switch to simple search
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# Optional: small help / tips card #}
+  <div class="col-md-3 mb-4">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h2 class="h6 mb-0">Search tips</h2>
+      </div>
+      <div class="card-body small text-muted">
+        <ul class="mb-0 ps-3">
+          <li>Use ISBN, ISSN, or OCLC number for precise matches.</li>
+          <li>Combine title and author with AND to narrow results.</li>
+          <li>Try OR between related terms (e.g. “statistics OR data analysis”).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

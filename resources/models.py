@@ -177,6 +177,32 @@ class OERResource(models.Model):
     content_embedding = VectorField(dimensions=384, null=True, blank=True)
     keywords = models.JSONField(default=list, blank=True)
     ai_generated_summary = models.TextField(blank=True)
+
+    # Standard identifiers
+    isbn = models.CharField(
+        max_length=32,
+        blank=True,
+        db_index=True,
+        help_text="Normalised ISBN-10 or ISBN-13 without punctuation."
+    )
+    issn = models.CharField(
+        max_length=16,
+        blank=True,
+        db_index=True,
+        help_text="Normalised ISSN without punctuation."
+    )
+    oclc_number = models.CharField(
+        max_length=32,
+        blank=True,
+        db_index=True,
+        help_text="OCLC control number (normalised digits only where possible)."
+    )
+    doi = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+        help_text="DOI string as provided (not URL)."
+    )
     
     # NEW: Translation fields for non-English resources
     title_en = models.CharField(

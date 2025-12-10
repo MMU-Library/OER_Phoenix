@@ -25,6 +25,13 @@
         </form>
 
         {% if detailed_results %}
+            <!-- About these results -->
+            <div class="alert alert-info py-2 small">
+                <strong>About these results:</strong>
+                This search combines traditional keyword ranking with AI “semantic similarity”, which looks at the meaning of your query and the resource content, not just exact words. 
+                Higher AI confidence usually indicates a closer conceptual match, even when titles do not share many keywords.
+            </div>
+
             <div class="row">
                 <!-- Filters Sidebar -->
                 <div class="col-md-3 mb-4">
@@ -127,14 +134,6 @@
 
                 <!-- Results Column -->
                 <div class="col-md-9">
-
-                    {% if detailed_results %}
-                    <div class="alert alert-info py-2 small">
-                        <strong>About these results:</strong>
-                        “AI confidence” uses semantic similarity between your query and resource content, while “Quality” is an internal 0–5 rating (shown as a percentage) based on metadata richness and pedagogic fitness.
-                    </div>
-                    {% endif %}
-
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h2 class="mb-0">AI Search Results ({{ detailed_results|length }})</h2>
 
@@ -176,7 +175,7 @@
 
                         </div>
                     </div>
-                    
+
                     <!-- Results Grid -->
                     <div class="row">
                         {% for r in detailed_results %}
@@ -199,12 +198,12 @@
                                                     {% if r.resource.overall_quality_score %}
                                                         {% with percent=r.resource.overall_quality_score|multiply:20 %}
                                                             <span class="badge quality-badge 
-                                                                {% if percent >= 80 %}quality-high
-                                                                {% elif percent >= 40 %}quality-medium
-                                                                {% else %}quality-low
+                                                                {% if percent >= 80 %}bg-success text-white
+                                                                {% elif percent >= 40 %}bg-warning text-dark
+                                                                {% else %}bg-danger text-white
                                                                 {% endif %}"
                                                                   data-bs-toggle="tooltip"
-                                                                  title="Quality score is based on an internal 0–5 rating (shown here as a percentage). It reflects metadata richness, clarity, and pedagogic suitability.">
+                                                                  title="Quality is an internal 0–5 score (shown as a percentage) based on metadata richness, clarity, and pedagogic suitability.">
                                                                 Quality: {{ percent|floatformat:0 }}%
                                                             </span>
                                                         {% endwith %}
@@ -217,17 +216,39 @@
                                                     {% endif %}
 
                                                     {% if r.similarity_score %}
+                                                        {% with conf=r.similarity_score|multiply:100 %}
                                                         <span class="badge bg-info text-dark"
                                                               data-bs-toggle="tooltip"
-                                                              title="AI confidence shows how closely this resource’s content matches your query, using semantic similarity rather than keywords alone.">
-                                                            AI confidence: {{ r.similarity_score|floatformat:2 }}
+                                                              title="AI confidence is a semantic similarity score between 0 and 1, shown here as a percentage. Higher is better; scores above 60% usually indicate a strong conceptual match.">
+                                                            AI confidence: {{ conf|floatformat:0 }}%
                                                         </span>
+                                                        {% endwith %}
                                                     {% endif %}
                                                 </div>
-                                            </div>
-                                            <div class="text-end ms-3">
-                                                <div class="badge bg-primary" title="Final combined score used for ranking.">
-                                                    Score: {{ r.final_score|floatformat:2 }}
+
+                                                <!-- About this result -->
+                                                <div class="mb-2">
+                                                    <button class="btn btn-link btn-sm p-0" type="button"
+                                                            data-bs-toggle="collapse"
+                                                            data-bs-target="#why_{{ r.resource.id }}"
+                                                            aria-expanded="false"
+                                                            aria-controls="why_{{ r.resource.id }}">
+                                                        Why this result?
+                                                    </button>
+                                                    <div class="collapse mt-1" id="why_{{ r.resource.id }}">
+                                                        <small class="text-muted">
+                                                            Matched via {{ r.match_reason|match_reason_badge }}.
+                                                            {% if r.similarity_score %}
+                                                                AI confidence {{ r.similarity_score|multiply:100|floatformat:0 }}% (semantic similarity between your query and this resource).
+                                                            {% endif %}
+                                                            {% if r.resource.overall_quality_score %}
+                                                                Quality score {{ r.resource.overall_quality_score|floatformat:1 }} on a 0–5 scale, based on metadata completeness and pedagogic indicators.
+                                                            {% else %}
+                                                                This resource has not yet been given a quality score.
+                                                            {% endif %}
+                                                            Final ranking score {{ r.final_score|floatformat:2 }} combines these signals to decide ordering.
+                                                        </small>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -316,4 +337,3 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
-

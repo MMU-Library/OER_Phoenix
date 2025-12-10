@@ -115,6 +115,22 @@
     </div>
 </div>
 
+<div class="mb-3">
+    <button class="btn btn-link btn-sm p-0" type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#why_dashboard_stats"
+            aria-expanded="false"
+            aria-controls="why_dashboard_stats">
+        Why these numbers?
+    </button>
+    <div class="collapse mt-1" id="why_dashboard_stats">
+        <small class="text-muted">
+            “Open Resources” counts active items in the collection, “Subject Areas” counts distinct subject metadata values,
+            and “Resource Collections” shows active sources with at least one resource. Charts and tables use the same data.
+        </small>
+    </div>
+</div>
+
 <div class="row">
     <!-- Left column: subjects + sources -->
     <div class="col-md-6 mb-4">
@@ -178,10 +194,16 @@
             <div class="card-body">
                 {% if type_counts %}
                     <!-- Chart Canvas -->
-                    <div class="mb-3" style="height: 300px;">
+                    <div class="mb-2" style="height: 300px;">
                         <canvas id="resourceTypeChart" width="400" height="400"></canvas>
-
                     </div>
+
+                    {% if type_counts.0 %}
+                        <p class="text-muted small mb-3">
+                            Most common type: {{ type_counts.0.resource_type|default:"(unspecified)" }}
+                            ({{ type_counts.0.count }} resources)
+                        </p>
+                    {% endif %}
                     
                     <!-- Data Table -->
                     <ul class="list-group list-group-flush">

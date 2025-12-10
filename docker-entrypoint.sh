@@ -1,5 +1,10 @@
 #!/bin/sh
-
+# Developer note:
+# - Database lives in the 'db' container.
+# - Migrations are run automatically on container start.
+# - To run Django commands manually, use:
+#       docker compose exec web python manage.py <command>
+#   rather than calling manage.py directly on the host.
 # Wait for database to be ready
 echo "Waiting for database to be ready..."
 while ! pg_isready -h $DB_HOST -U $DB_USER; do

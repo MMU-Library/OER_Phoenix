@@ -33,6 +33,7 @@ from resources.services.talis import (
     TalisItem,
 )
 from resources.services.talis_analysis import analyse_talis_list
+from .services.search_engine import OERSearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -464,6 +465,159 @@ def compare_view(request):
         messages.error(request, "An error occurred while loading the comparison view.")
         return redirect('resources:home')
 
+def advanced_search(request):
+    """
+    Fielded advanced search view.
+
+    - Accepts up to 3 rows of (operator, field, term).
+    - Normalises identifier fields (ISBN/ISSN/OCLC) into filters.
+    - Uses the same OERSearchEngine.hybrid_search backend as ai_search.
+    """
+    try:
+        # Read fielded rows
+        q1 = request.GET.get("q1", "").strip()
+        q2 = request.GET.get("q2", "").strip()
+        q3 = request.GET.get("q3", "").strip()
+
+        f1 = request.GET.get("f1", "any")
+        f2 = request.GET.get("f2", "any")
+        f3 = request.GET.get("f3", "any")
+
+        op2 = request.GET.get("op2", "AND")
+        op3 = request.GET.get("op3", "AND")
+
+        # Optional extra limits
+        adv_resource_type = request.GET.get("adv_resource_type") or ""
+        adv_language = request.GET.get("adv_language") or ""
+
+        # Build a human-readable combined query string for display / logging
+        parts = []
+        if q1:
+            parts.append(q1)
+        if q2:
+            parts.append(f"{op2} {q2}")
+        if q3:
+            parts.append(f"{op3} {q3}")
+        display_query = " ".join(parts)
+
+        # Build filters dict understood by OERSearchEngine
+        search_filters = {}
+
+        # Resource type / language limits
+        if adv_resource_type:
+            search_filters.setdefault("resource_type", []).append(adv_resource_type)
+        if adv_language:
+            search_filters.setdefault("language", []).append(adv_language)
+
+        # Identifier filters (exact/normalised)
+        def _clean_identifier(value: str) -> str:
+            # Strip spaces and common punctuation; keep digits/X
+            import re
+            return re.sub(r"[^0-9Xx]", "", value)
+
+        identifier_filters = {}
+        if q1 and f1 in ("isbn", "issn", "oclc"):
+            identifier_filters[f1] = _clean_identifier(q1)
+        if q2 and f2 in ("isbn", "issn", "oclc"):
+            identifier_filters[f2] = _clean_identifier(q2)
+        if q3 and f3 in ("isbn", "issn", "oclc"):
+            identifier_filters[f3] = _clean_identifier(q3)
+
+        if identifier_filters:
+            # Merge into search_filters using your model field names
+            # Adjust keys to match OERResource fields (e.g. isbn, issn, oclc_number)
+            if "isbn" in identifier_filters:
+                search_filters.setdefault("isbn", []).append(identifier_filters["isbn"])
+            if "issn" in identifier_filters:
+                search_filters.setdefault("issn", []).append(identifier_filters["issn"])
+            if "oclc" in identifier_filters:
+                search_filters.setdefault("oclc_number", []).append(identifier_filters["oclc"])
+
+        # Build a free-text query string for hybrid_search from non-identifier fields
+        free_text_clauses = []
+
+        def _append_clause(term, field, op):
+            if not term:
+                return
+            # For now, just append the term; you could add field hints later
+            if not free_text_clauses:
+                free_text_clauses.append(term)
+            else:
+                free_text_clauses.append(f"{op} {term}")
+
+        if q1 and f1 not in ("isbn", "issn", "oclc"):
+            _append_clause(q1, f1, "AND")
+        if q2 and f2 not in ("isbn", "issn", "oclc"):
+            _append_clause(q2, f2, op2)
+        if q3 and f3 not in ("isbn", "issn", "oclc"):
+            _append_clause(q3, f3, op3)
+
+        query_string = " ".join(free_text_clauses).strip()
+
+        detailed_results = []
+        facets = {}
+        sort_by = "relevance"
+
+        if query_string or identifier_filters:
+            engine = OERSearchEngine()
+
+            results = engine.hybrid_search(
+                query=query_string or "",  # empty ok if pure identifier search
+                filters=search_filters if search_filters else None,
+                limit=50,
+            )
+
+            results = engine.sort_results(results, sort_by=sort_by)
+
+            facets = engine.get_facets(
+                query=query_string or display_query or "",
+                applied_filters=search_filters if search_filters else None,
+            )
+
+            detailed_results = results
+
+            # Store for export as with ai_search
+            request.session["last_search_results"] = [
+                {
+                    "id": getattr(r.resource, "id", None),
+                    "title": getattr(r.resource, "title", ""),
+                    "url": getattr(r.resource, "url", ""),
+                    "score": float(r.final_score),
+                    "source": getattr(r.resource.source, "name", ""),
+                }
+                for r in results
+            ]
+
+        # Reuse the ai_search template so UI is consistent
+        context = {
+            "query": display_query,
+            "detailed_results": detailed_results,
+            "facets": facets,
+            "applied_filters": {
+                "sources": request.GET.getlist("source"),
+                "languages": request.GET.getlist("language"),
+                "resource_types": request.GET.getlist("resource_type"),
+                "subjects": request.GET.getlist("subject"),
+            },
+            "sort_by": sort_by,
+            "ai_search": True,
+            "advanced": True,
+        }
+        return render(request, "resources/advanced_search.html", context)
+
+    except Exception as e:
+        messages.error(request, f"An error occurred during advanced search: {e}")
+        return render(request, "resources/advanced_search.html", {
+            "query": "",
+            "detailed_results": [],
+            "facets": {},
+            "applied_filters": {
+                "sources": [], "languages": [], "resource_types": [], "subjects": []
+            },
+            "sort_by": "relevance",
+            "ai_search": True,
+            "advanced": True,
+        })
 
 # Home View - Use the existing template
 def home(request):
