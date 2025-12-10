@@ -158,23 +158,37 @@ def talis_list_analyse_view(request):
         if request.method == "POST":
             talis_list = None
 
-            if "talis_csv" in request.FILES:
-                talis_list = parse_csv_to_talis_list(request.FILES["talis_csv"])
-            else:
-                talis_url = request.POST.get("talis_url", "").strip()
-                if talis_url:
-                    talis_list = fetch_list_from_url(talis_url)
+            # Basic validation: require either a CSV or a URL
+            csv_file = request.FILES.get("dash_talis_csv") or request.FILES.get("talis_csv")
+            talis_url = request.POST.get("dash_talis_url", "") or request.POST.get("talis_url", "")
+            talis_url = talis_url.strip()
+
+            if not csv_file and not talis_url:
+                messages.error(
+                    request,
+                    "Please upload a Talis CSV file or paste a reading list URL.",
+                )
+                return redirect("resources:dashboard")
+
+            if csv_file:
+                talis_list = parse_csv_to_talis_list(csv_file)
+            elif talis_url:
+                talis_list = fetch_list_from_url(talis_url)
 
             if talis_list:
                 _store_talis_list_in_session(request, talis_list)
-                return redirect('resources:talis_preview_dashboard')
+                return redirect("resources:talis_preview_dashboard")
 
         # GET or invalid POST: show a generic form page (can share template)
         return render(request, "resources/talis_jobs.html", {})
     except Exception as e:
         logger.error(f"Error in talis_list_analyse_view: {str(e)}")
-        messages.error(request, "An error occurred while preparing the Talis analysis.")
-        return redirect('resources:dashboard')
+        messages.error(
+            request,
+            "An error occurred while preparing the Talis analysis.",
+        )
+        return redirect("resources:dashboard")
+
 
 
 def talis_list_preview_view(request):

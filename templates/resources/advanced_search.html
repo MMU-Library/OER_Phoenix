@@ -20,14 +20,16 @@
         <h2 class="h5 mb-0">Build your search</h2>
       </div>
       <div class="card-body">
-        <form method="get" action="{% url 'resources:advanced_search' %}">
+        <form method="get" action="{% url 'resources:advanced_search' %}" id="advancedSearchForm">
           {# Row 1 #}
           <div class="row g-2 align-items-center mb-2">
             <div class="col-md-3">
               <span class="form-text">Search for</span>
             </div>
             <div class="col-md-5">
-              <input type="text" name="q1" class="form-control"
+              <input type="text"
+                     name="q1"
+                     class="form-control"
                      value="{{ request.GET.q1 }}"
                      placeholder="Enter search terms">
             </div>
@@ -54,7 +56,9 @@
               </select>
             </div>
             <div class="col-md-5">
-              <input type="text" name="q2" class="form-control"
+              <input type="text"
+                     name="q2"
+                     class="form-control"
                      value="{{ request.GET.q2 }}"
                      placeholder="Optional second line">
             </div>
@@ -81,7 +85,9 @@
               </select>
             </div>
             <div class="col-md-5">
-              <input type="text" name="q3" class="form-control"
+              <input type="text"
+                     name="q3"
+                     class="form-control"
                      value="{{ request.GET.q3 }}"
                      placeholder="Optional third line">
             </div>
@@ -124,10 +130,13 @@
             </div>
           </div>
 
-          <div class="d-flex justify-content-between">
+          <div class="d-flex justify-content-between align-items-center">
             <div>
-              <button type="submit" class="btn btn-primary">
-                Search
+              <button type="submit" class="btn btn-primary" id="advancedSearchBtn">
+                <span class="btn-text">Search</span>
+                <span class="spinner-border spinner-border-sm d-none"
+                      role="status"
+                      aria-hidden="true"></span>
               </button>
               <a href="{% url 'resources:advanced_search' %}" class="btn btn-outline-secondary">
                 Reset
@@ -164,10 +173,10 @@
                           {% if r.resource.overall_quality_score %}
                             {% with percent=r.resource.overall_quality_score|multiply:20 %}
                               <span class="badge quality-badge
-                                  {% if percent >= 80 %}bg-success text-white
-                                  {% elif percent >= 40 %}bg-warning text-dark
-                                  {% else %}bg-danger text-white
-                                  {% endif %}"
+                                   {% if percent >= 80 %}bg-success text-white
+                                   {% elif percent >= 40 %}bg-warning text-dark
+                                   {% else %}bg-danger text-white
+                                   {% endif %}"
                                     data-bs-toggle="tooltip"
                                     title="Quality is an internal 0–5 score (shown as a percentage) based on metadata richness, clarity, and pedagogic suitability.">
                                 Quality: {{ percent|floatformat:0 }}%
@@ -190,6 +199,33 @@
                               </span>
                             {% endwith %}
                           {% endif %}
+                        </div>
+
+                        <div class="mb-2">
+                          <button type="button"
+                                  class="btn btn-link btn-sm p-0"
+                                  data-bs-toggle="collapse"
+                                  data-bs-target="#why-{{ r.resource.id }}">
+                            <i class="bi bi-question-circle me-1"></i>
+                            Why this result?
+                          </button>
+                          <div class="collapse mt-1" id="why-{{ r.resource.id }}">
+                            <small class="text-muted">
+                              Matched via {{ r.match_reason|match_reason_badge }}.
+                              {% if r.similarity_score %}
+                                AI confidence {{ r.similarity_score|multiply:100|floatformat:0 }}%
+                                (semantic similarity between your query and this resource).
+                              {% endif %}
+                              {% if r.resource.overall_quality_score %}
+                                Quality score {{ r.resource.overall_quality_score|floatformat:1 }}
+                                on a 0–5 scale, based on metadata completeness and pedagogic indicators.
+                              {% else %}
+                                This resource has not yet been given a quality score.
+                              {% endif %}
+                              Final ranking score {{ r.final_score|floatformat:2 }}
+                              combines these signals to decide ordering.
+                            </small>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -239,4 +275,31 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Enable Bootstrap tooltips for score badges
+document.addEventListener('DOMContentLoaded', function () {
+  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  [...tooltipTriggerList].forEach(el => new bootstrap.Tooltip(el));
+});
+
+// Show loading spinner on advanced search submit
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('advancedSearchForm');
+  const btn  = document.getElementById('advancedSearchBtn');
+  if (!form || !btn) return;
+
+  form.addEventListener('submit', function () {
+    const textSpan = btn.querySelector('.btn-text');
+    const spinner  = btn.querySelector('.spinner-border');
+    if (textSpan && spinner) {
+      textSpan.classList.add('d-none');
+      spinner.classList.remove('d-none');
+    }
+    btn.disabled = true;
+  });
+});
+</script>
 {% endblock %}
