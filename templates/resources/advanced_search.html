@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load oer_filters %}
 
 {% block title %}Advanced Search - OER Platform{% endblock %}
 
@@ -137,6 +138,87 @@
             </a>
           </div>
         </form>
+
+        {# Results section #}
+        {% if detailed_results %}
+          <hr class="my-4">
+          <h2 class="h5 mb-3">Results ({{ detailed_results|length }})</h2>
+          <div class="row">
+            {% for r in detailed_results %}
+              <div class="col-md-12 mb-3">
+                <div class="card h-100 shadow-sm">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                      <div class="flex-grow-1">
+                        <h5 class="card-title mb-1">
+                          {{ r.resource.title }}
+                          {% if r.resource.language != 'en' %}
+                            {{ r.resource.language|language_badge }}
+                          {% endif %}
+                        </h5>
+
+                        <div class="mb-2 d-flex flex-wrap align-items-center gap-1">
+                          {{ r.resource.source|source_badge }}
+                          {{ r.match_reason|match_reason_badge }}
+
+                          {% if r.resource.overall_quality_score %}
+                            {% with percent=r.resource.overall_quality_score|multiply:20 %}
+                              <span class="badge quality-badge
+                                  {% if percent >= 80 %}bg-success text-white
+                                  {% elif percent >= 40 %}bg-warning text-dark
+                                  {% else %}bg-danger text-white
+                                  {% endif %}"
+                                    data-bs-toggle="tooltip"
+                                    title="Quality is an internal 0–5 score (shown as a percentage) based on metadata richness, clarity, and pedagogic suitability.">
+                                Quality: {{ percent|floatformat:0 }}%
+                              </span>
+                            {% endwith %}
+                          {% else %}
+                            <span class="badge bg-secondary"
+                                  data-bs-toggle="tooltip"
+                                  title="This resource has not yet been assessed by the quality checker.">
+                              Quality: Not rated
+                            </span>
+                          {% endif %}
+
+                          {% if r.similarity_score %}
+                            {% with conf=r.similarity_score|multiply:100 %}
+                              <span class="badge bg-info text-dark"
+                                    data-bs-toggle="tooltip"
+                                    title="AI confidence is a semantic similarity score between 0 and 1, shown here as a percentage. Higher is better; scores above 60% usually indicate a strong conceptual match.">
+                                AI confidence: {{ conf|floatformat:0 }}%
+                              </span>
+                            {% endwith %}
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p class="card-text">{{ r.resource.description|truncatewords:40 }}</p>
+
+                    <div class="mb-2">
+                      <small class="text-muted">
+                        {% if r.resource.subject %}
+                          <strong>Subject:</strong> {{ r.resource.subject }} ·
+                        {% endif %}
+                        {% if r.resource.author %}
+                          <strong>Author:</strong> {{ r.resource.author }} ·
+                        {% endif %}
+                        {% if r.resource.license %}
+                          <strong>License:</strong> {{ r.resource.license }}
+                        {% endif %}
+                      </small>
+                    </div>
+
+                    <div class="d-flex gap-2 align-items-center">
+                      {{ r.resource|link_type_button }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
       </div>
     </div>
   </div>

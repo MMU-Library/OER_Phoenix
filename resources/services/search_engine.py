@@ -206,7 +206,6 @@ class OERSearchEngine:
 
     def _apply_filters(self, qs: QuerySet, filters: Dict) -> QuerySet:
         """Apply multiple filters to queryset."""
-
         # Language filter
         if "language" in filters and filters["language"]:
             langs = filters["language"] if isinstance(filters["language"], list) else [filters["language"]]
@@ -219,9 +218,7 @@ class OERSearchEngine:
 
         # Resource type filter
         if "resource_type" in filters and filters["resource_type"]:
-            types = filters["resource_type"] if isinstance(filters["resource_type"], list) else [
-                filters["resource_type"]
-            ]
+            types = filters["resource_type"] if isinstance(filters["resource_type"], list) else [filters["resource_type"]]
             qs = qs.filter(resource_type__in=types)
 
         # Subject filter
@@ -237,11 +234,23 @@ class OERSearchEngine:
         if "license" in filters and filters["license"]:
             qs = qs.filter(license__icontains=filters["license"])
 
+        # Identifier filters
+        if "isbn" in filters and filters["isbn"]:
+            isbns = filters["isbn"] if isinstance(filters["isbn"], list) else [filters["isbn"]]
+            qs = qs.filter(isbn__in=isbns)
+        if "issn" in filters and filters["issn"]:
+            issns = filters["issn"] if isinstance(filters["issn"], list) else [filters["issn"]]
+            qs = qs.filter(issn__in=issns)
+        if "oclc_number" in filters and filters["oclc_number"]:
+            oclcs = filters["oclc_number"] if isinstance(filters["oclc_number"], list) else [filters["oclc_number"]]
+            qs = qs.filter(oclc_number__in=oclcs)
+
         # Minimum quality filter
         if "min_quality" in filters:
             qs = qs.filter(overall_quality_score__gte=filters["min_quality"])
 
         return qs
+
 
     def get_facets(self, query: Optional[str] = None, applied_filters: Optional[Dict] = None) -> Dict:
         """

@@ -19,8 +19,8 @@ def star_rating(score):
     html += '★' * stars
     if half_star:
         html += '½'
-    html += '<span class="text-muted">' + '☆' * empty_stars + '</span>'
-    html += f' <small>({score:.1f})</small></span>'
+    html += ' ' + '☆' * empty_stars + '</span>'
+    html += f' <span class="text-muted">({score:.1f})</span>'
     return mark_safe(html)
 
 
@@ -57,9 +57,8 @@ def language_badge(language_code):
         "ko": "Korean",
         "ar": "Arabic",
     }
-
     lang_name = language_names.get(language_code.lower(), language_code.upper())
-    return mark_safe(f'<span class="badge bg-info">{lang_name}</span>')
+    return mark_safe(f'<span class="badge bg-secondary ms-1">{lang_name}</span>')
 
 
 @register.filter
@@ -80,8 +79,7 @@ def source_badge(source):
         else source.name
     )
     color = source_colors.get(source_name, "secondary")
-
-    return mark_safe(f'<span class="badge bg-{color}">{source_name}</span>')
+    return mark_safe(f'<span class="badge bg-{color} me-1">{source_name}</span>')
 
 
 @register.filter
@@ -100,7 +98,7 @@ def match_reason_badge(reason):
     }
 
     label, color = reason_labels.get(str(reason).lower(), (reason, "secondary"))
-    return mark_safe(f'<span class="badge bg-{color}">{label}</span>')
+    return mark_safe(f'<span class="badge bg-{color} me-1">{label}</span>')
 
 
 @register.simple_tag
@@ -114,29 +112,59 @@ def translate_button(resource):
         return ""
 
     return mark_safe(
-        f'<button class="btn btn-sm btn-outline-secondary" '
-        f'onclick="translateResource({resource.id})" title="Translate to English">'
-        f'<i class="bi bi-translate"></i> Translate</button>'
+        '<button type="button" '
+        'class="btn btn-sm btn-outline-secondary ms-2" '
+        'data-action="translate-resource" '
+        f'data-resource-id="{getattr(resource, "id", "")}">'
+        '<i class="bi bi-translate"></i> Translate'
+        "</button>"
     )
+
+
+@register.filter
+def startswith(value, prefix):
+    """Simple startswith filter for templates."""
+    try:
+        return str(value).startswith(prefix)
+    except Exception:
+        return False
+
+
+def _looks_like_url(url: str) -> bool:
+    """
+    Heuristic: true URLs start with http(s) or ftp.
+
+    ONIX-derived filenames and bare IDs are deliberately excluded so they
+    are not auto-wrapped as external links.
+    """
+    if not url:
+        return False
+    return url.lower().startswith(("http://", "https://", "ftp://"))
 
 
 @register.filter
 def link_type_button(resource):
     """
     Generate appropriate button text and icon based on link type.
+
     Detects PDFs, web pages, and other formats for librarian-friendly display.
+    Only treats values that look like real URLs as external; ONIX-style
+    filenames or bare identifiers are left for internal handling.
     """
     if not resource or not hasattr(resource, "url"):
-        return mark_safe('<span class="btn btn-sm btn-secondary disabled">No Link</span>')
+        return mark_safe('<span class="text-muted">No link</span>')
 
-    url = resource.url
-    if not url:
-        return mark_safe('<span class="btn btn-sm btn-secondary disabled">No Link</span>')
+    raw_url = resource.url or ""
+    if not _looks_like_url(raw_url):
+        # No trustworthy external URL; offer an internal record link instead.
+        title = getattr(resource, "title", "")
+        return mark_safe(
+            f'<a href="/search/?query={title}" '
+            'class="btn btn-sm btn-outline-secondary">'
+            'View record</a>'
+        )
 
-    # Ensure URL has protocol
-    if not url.startswith(("http://", "https://", "ftp://")):
-        url = "https://" + url
-
+    url = raw_url
     url_lower = url.lower()
     format_field = (
         resource.format.lower()
@@ -149,14 +177,14 @@ def link_type_button(resource):
         icon = "📄"
         text = "Download PDF"
         btn_class = "btn-danger"
-        title = "Direct PDF download"
+        title_attr = "Direct PDF download"
 
     # Detect EPUB/ebook formats
     elif ".epub" in url_lower or "epub" in format_field:
         icon = "📖"
         text = "Download E-book"
         btn_class = "btn-info"
-        title = "E-book format (EPUB)"
+        title_attr = "E-book format (EPUB)"
 
     # Detect video content
     elif any(
@@ -166,21 +194,21 @@ def link_type_button(resource):
         icon = "🎬"
         text = "View Video"
         btn_class = "btn-dark"
-        title = "Video resource"
+        title_attr = "Video resource"
 
     # Detect DOI links (scholarly articles)
     elif "doi.org" in url_lower or "dx.doi.org" in url_lower:
         icon = "🔗"
         text = "View Article (DOI)"
         btn_class = "btn-success"
-        title = "Academic article via DOI"
+        title_attr = "Academic article via DOI"
 
     # Detect archive.org links
     elif "archive.org" in url_lower:
         icon = "📚"
         text = "View on Archive.org"
         btn_class = "btn-warning"
-        title = "Internet Archive resource"
+        title_attr = "Internet Archive resource"
 
     # Detect repository/institutional pages
     elif any(
@@ -189,17 +217,19 @@ def link_type_button(resource):
         icon = "🗃️"
         text = "View in Repository"
         btn_class = "btn-primary"
-        title = "Institutional repository"
+        title_attr = "Institutional repository"
 
     # Default: web page
     else:
         icon = "🌐"
         text = "View Resource"
         btn_class = "btn-outline-primary"
-        title = "External web page"
+        title_attr = "External web page"
 
     return mark_safe(
-        f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
-        f'class="btn btn-sm {btn_class}" title="{title}">'
+        f'<a href="{url}" '
+        f'class="btn btn-sm {btn_class}" '
+        f'title="{title_attr}" '
+        'target="_blank" rel="noopener">'
         f'{icon} {text}</a>'
     )

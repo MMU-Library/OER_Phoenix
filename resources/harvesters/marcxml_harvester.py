@@ -6,6 +6,21 @@ from resources.harvesters.base_harvester import BaseHarvester
 logger = logging.getLogger(__name__)
 
 
+def _normalise_url(raw: str) -> str:
+    """
+    Return a safe external URL or empty string.
+
+    - Only accept values starting with http:// or https://.
+    - Everything else (ISBNs, ONIX filenames, bare IDs) is treated as missing.
+    """
+    if not raw:
+        return ""
+    raw = raw.strip()
+    if raw.lower().startswith(("http://", "https://")):
+        return raw
+    return ""
+
+
 class MARCXMLHarvester(BaseHarvester):
     """MARCXML harvester that uses `pymarc` when available for robust parsing,
     falling back to a lightweight ElementTree parser when not present.
@@ -30,6 +45,7 @@ class MARCXMLHarvester(BaseHarvester):
             marc_records = parse_xml_to_array(io.BytesIO(content))
             for mr in marc_records:
                 title = mr.title() if hasattr(mr, 'title') else ''
+
                 # authors: gather 100 and 700 subfield a
                 authors = []
                 for f in mr.get_fields('100', '700'):
@@ -76,7 +92,8 @@ class MARCXMLHarvester(BaseHarvester):
 
                 records.append({
                     'title': title or isbn or 'Untitled',
-                    'url': url or isbn or '',
+                    # changed: only accept real http(s) URLs, never fall back to ISBN
+                    'url': _normalise_url(url),
                     'description': description,
                     'author': ', '.join(authors) if authors else '',
                     'publisher': publisher,
@@ -155,7 +172,8 @@ class MARCXMLHarvester(BaseHarvester):
 
                 records.append({
                     'title': title or isbn or 'Untitled',
-                    'url': url or isbn or '',
+                    # changed: only accept real http(s) URLs, never fall back to ISBN
+                    'url': _normalise_url(url),
                     'description': description,
                     'author': ', '.join(authors) if authors else '',
                     'publisher': publisher,
