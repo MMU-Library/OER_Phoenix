@@ -1,204 +1,206 @@
+The updated README content can safely replace the existing one; it keeps the important Docker, stack, and usage details while adding the new search/advanced-search, identifiers, and MARCXML behaviour. Below is a streamlined, best‑practice version you can drop into `README.md`.
+
+## Updated `README.md`
+
+```markdown
+# OER_Phoenix
+
+OER_Phoenix is an open‑source discovery and analysis platform for Open Educational Resources (OER), developed at Manchester Metropolitan University Library Services.[web:1]
+
+It aggregates OER from multiple providers (e.g. OAPEN, DOAB, OER Commons, OpenStax, MARCXML feeds), provides AI‑powered search for staff and students, and supports Talis Aspire reading‑list analysis and export.[web:1][file:88]
 
 ---
 
-# OER_Rebirth  
-Open Educational Resources Discovery & Analysis Platform for Academic Libraries  
+## Features
 
-A Django-based digital library system designed for UK academic subject librarians to discover OER and analyse Talis Aspire reading lists for open alternatives. Built for Manchester Metropolitan University Library Services.
+### Discovery & Search
+
+- **AI Search**
+  - Hybrid semantic + keyword ranking via `OERSearchEngine.hybrid_search` (pgvector + BM25).[file:3][file:88]
+  - Faceted filters (source, language, resource type, subject) and sort options (relevance, newest, quality, title).[file:88]
+  - Result cards with:
+    - Source and match‑reason badges.
+    - **AI confidence** badge (semantic similarity 0–1 shown as a percentage).
+    - **Quality** badge (internal 0–5 quality score shown as a percentage).
+
+- **Advanced Search**
+  - Three‑row Boolean builder with fields:
+    - Any field, Title, Author / Creator, Subject / Keywords, ISBN, ISSN, OCLC number.[file:88]
+  - Additional limits for resource type and language.
+  - Uses the same hybrid engine and result model as AI Search; results can be shown on the main results page or inline beneath the form.[file:88]
+
+- **Dark mode**
+  - Optional light/dark toggle at the layout level using CSS variables and Bootstrap classes in `base.html`.[file:39]
+
+### Talis Aspire Workflows
+
+- Upload a Talis CSV or fetch a list by URL from the dashboard widget.[file:88]
+- Parse into a normalised `TalisList` in session (`talis.py`).[file:88]
+- Run AI matching per list item via the hybrid search engine and generate:
+  - Coverage summary (% of items with OER matches).
+  - Breakdown by resource type and other facets.[file:88]
+- Export reports as CSV and optionally push to Talis via `TalisPushJob` and Celery tasks.[file:88]
+
+### Data, Identifiers & Harvesting
+
+- **Models**
+  - `OERSource` – configuration for each provider (API, OAI‑PMH, CSV, MARCXML) with status and schedule.[file:39]
+  - `OERResource` – core resource model:
+    - Descriptive: title, description, subject, level, publisher, author, resource_type, format, license, language.[file:39]
+    - Identifiers: `isbn`, `issn`, `oclc_number`, `doi` for precise matching and export.[file:39]
+    - AI: `content_embedding`, `keywords`, `ai_generated_summary`, `title_en`, `description_en`.[file:39]
+    - Quality: `overall_quality_score` (0–5, exposed as a percentage in the UI).[file:88]
+  - `HarvestJob` and `TalisPushJob` – track harvesting runs and outbound report pushes.[file:39]
+
+- **Harvesters**
+  - Generic harvesters for API, OAI‑PMH, and CSV in `resources/harvesters/`.[web:1]
+  - `MARCXMLHarvester`:
+    - Uses `pymarc.parse_xml_to_array` when available, falling back to ElementTree for robustness.[file:90]
+    - Extracts title, authors, publisher, language, description, ISBN, and 856$u URLs.
+    - **URL hardening:** only strings starting with `http://` or `https://` are stored in `OERResource.url`; ONIX‑style filenames and bare ISBNs are no longer used as external links.[file:90]
+
+### Frontend & Templates
+
+- Bootstrap 5‑based UI with a fixed top navbar, dark‑mode toggle, and responsive grid layouts.[file:39]
+- Dashboard charts (resource‑type breakdown, etc.) using Chart.js.[file:39]
+- Template tags in `resources/templatetags/oer_filters.py`:
+  - `language_badge`, `source_badge`, `match_reason_badge`, `star_rating`, `multiply`.[file:90]
+  - `link_type_button(resource)`:
+    - Detects PDFs, EPUBs, video, DOI links, repositories, and generic web pages to label buttons appropriately.
+    - Only treats values that already look like real URLs as external links; non‑URL strings (e.g. ONIX filenames) fall back to a safe “View record” link instead of a broken external URL.[file:90]
 
 ---
 
-## Overview  
-OER_Rebirth aggregates open educational resources from multiple providers (OAPEN, DOAB, OER Commons, OpenStax) and provides:  
-- **AI-powered semantic search** using sentence-transformers (all-MiniLM-L6-v2) with pgvector  
-- **Talis Aspire reading list analysis**: upload CSV or link to a Talis list to find OER alternatives for each item  
-- **Dashboard interface** for librarians with resource statistics, subject breakdowns, and maintenance tools  
-- **Multi-source harvesting** via OAI-PMH, REST APIs, CSV, and MARCXML  
-- **Self-hosted and open source**: Docker-based deployment, no vendor lock-in  
+## Architecture
+
+- **Backend:** Django 5, Python 3.12.[web:1]
+- **Database:** PostgreSQL with `pgvector` extension via `pgvector.django`.[file:39]
+- **Search engine:** `resources/services/search_engine.py`
+  - Embedding generation (SentenceTransformers model, configurable via settings).
+  - Cosine similarity over `content_embedding` combined with keyword scores.
+  - Faceting and filter application (source, language, resource_type, subject, etc.).[file:3]
+- **Async / background:** Celery + Redis for harvest jobs, embedding generation, and Talis push tasks.[web:1]
+- **Containers:** `docker-compose.yml` orchestrates:
+  - `web` (Django app), `db` (pgvector/Postgres), `redis`, `celery`, `celery-beat`,
+  - `pgadmin` for DB inspection, and `qdrant` (reserved for future vector search experiments).[web:1]
 
 ---
 
-## Key Features  
+## Repository Layout (selected)
 
-### For Subject Librarians
-- Dashboard landing page with AI search, Talis analysis widget, and resource statistics  
-- Reading list coverage analysis: upload a Talis CSV export or paste a list URL to identify open alternatives for proprietary items  
-- Semantic search: find OER by topic, learning outcome, or natural language query  
-- Collection building: save analysis results and export back to Talis  
-
-### For Administrators
-- Unified source management: configure API, OAI-PMH, CSV, and MARCXML harvesters via admin interface  
-- Automated harvesting: scheduled background jobs with status tracking and error logging  
-- Embedding generation: batch or selective AI embedding creation for semantic search  
-- Quality scoring: built-in metrics for resource assessment  
-
----
-
-## Architecture  
-
-### Technology Stack
-- **Backend**: Django 5.x, Python 3.12  
-- **Database**: PostgreSQL 16 with pgvector extension  
-- **Search**: SentenceTransformers (all-MiniLM-L6-v2), cosine similarity  
-- **Containerization**: Docker Compose  
-- **Frontend**: Bootstrap 5, Chart.js  
-- **APIs**: OAI-PMH, REST, Talis Aspire integration  
-
-### Core Components  
 ```
 oer_rebirth/
-├── resources/ # Main Django app
-│   ├── models.py # OERResource, OERSource, HarvestJob
-│   ├── views.py # Dashboard, search, Talis analysis
-│   ├── admin.py # Admin interface with harvesting tools
+├── oer_rebirth/
+│   ├── settings.py          # Django settings, env loading, pgvector config
+│   └── urls.py
+├── resources/
+│   ├── models.py            # OERSource, OERResource, HarvestJob, TalisPushJob
+│   ├── views.py             # Dashboard, AI search, advanced search, Talis flows, exports
 │   ├── services/
-│   │   ├── ai_utils.py # Embedding generation (SentenceTransformers)
-│   │   ├── search_engine.py # Semantic + keyword hybrid search
-│   │   └── talis_analysis.py # Reading list OER matching
-│   └── harvesters/ # API, OAI-PMH, CSV, MARCXML ingest
-├── templates/
-└── docker-compose.yml # PostgreSQL + Django services
+│   │   ├── search_engine.py     # Hybrid search & facets
+│   │   ├── talis.py             # Talis CSV/URL parsing
+│   │   └── talis_analysis.py    # Per‑item OER matching & coverage
+│   ├── harvesters/             # API, OAI-PMH, CSV, MARCXML harvesters
+│   ├── templatetags/
+│   │   └── oer_filters.py       # Badges, scores, link‑type logic
+│   └── templates/resources/
+│       ├── dashboard.html
+│       ├── search.html
+│       ├── advanced_search.html
+│       ├── compare.html
+│       ├── export.html
+│       ├── talis_*.html
+│       └── partials/
+├── docker-compose.yml
+├── docker-compose.override.yml
+├── docker-entrypoint.sh
+└── README.md
 ```
 
 ---
 
-## Installation  
+## Running with Docker
 
-### Prerequisites  
-- Docker and Docker Compose  
-- Git  
+### 1. Clone and configure
 
-### Quick Start  
-1. **Clone the repository**  
-```bash
-git clone https://github.com/MMU-Library/oer_rebirth.git
-cd oer_rebirth
-```  
-
-2. **Configure environment variables**  
-```bash
-cp .env.example .env
-```  
-Key variables:  
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: Database credentials  
-- `DJANGO_SECRET_KEY`: Generate via `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`  
-- `EMBEDDING_MODEL_NAME`: Default `all-MiniLM-L6-v2`  
-- `VECTOR_BACKEND`: Default `pgvector`  
-- Optional: `TALIS_TENANT`, `TALIS_CLIENT_ID`, `TALIS_CLIENT_SECRET` for Talis API export  
-
-3. **Build and start services**  
-```bash
-docker-compose build
-docker-compose up
-```  
-
-4. **Run migrations and create superuser**  
-```bash
-docker-compose exec web python manage.py migrate
-docker-compose exec web python manage.py createsuperuser
-```  
-
-5. **Access the platform**  
-- Dashboard: http://localhost:8000/  
-- Admin: http://localhost:8000/admin/  
-
----
-
-## Usage  
-
-### Initial Setup  
-1. **Add OER sources** via admin at `/admin/resources/oersource/add/`  
-   - Select source type (API, OAI-PMH, CSV, MARCXML)  
-   - Configure endpoint and credentials  
-   - Test connection before enabling  
-
-2. **Run harvesters** to populate the OER corpus  
-   - Use admin list actions or "Harvest" buttons on source detail pages  
-   - Monitor progress via "Harvest jobs" in admin  
-
-3. **Generate embeddings** for semantic search  
-   - Admin: select resources → Actions → "Generate embeddings for selected resources"  
-   - Dashboard (staff only): click "Generate missing embeddings" in maintenance card  
-
----
-
-## API Endpoints  
-
-### Search API  
-**Endpoint:** `/api/search/`  
-**Method:** GET  
-**Parameters:**  
-- `q` (required): search query  
-- `limit` (optional): max results, default 10  
-
-**Response:**  
-```json
-{
-    "results": [
-        {
-            "id": 123,
-            "title": "Introduction to Statistics",
-            "url": "https://...",
-            "score": 0.87,
-            "source": "OpenStax",
-            "resource_type": "Textbook"
-        }
-    ]
-}
+```
+git clone https://github.com/MMU-Library/OER_Phoenix.git
+cd OER_Phoenix
+cp .env.example .env   # if present; otherwise create .env
 ```
 
----
+Set at least in `.env`:[web:1]
 
-## Deployment  
+- `DJANGO_SECRET_KEY` – a strong random key.
+- `POSTGRES_DB=oer_rebirth`
+- `POSTGRES_USER=postgres`
+- `POSTGRES_PASSWORD=postgres`
 
-### Production Considerations  
-1. Use a production-grade WSGI server: Replace Django dev server with Gunicorn or uWSGI  
-2. Serve static files via nginx or CDN: Configure `STATIC_ROOT` and run `collectstatic`  
-3. Enable HTTPS: Use Let's Encrypt or institutional certificates  
-4. Set `DEBUG=False` in production environment  
-5. Configure `ALLOWED_HOSTS` with your domain  
-6. Schedule background tasks: Use Celery or cron for harvesting and embedding generation  
-7. Monitor logs: Centralize logs with ELK stack or similar  
-8. Backup database: Regular PostgreSQL dumps  
+Optional but recommended:
 
----
+- `LOCAL_LLM_URL`, `LOCAL_LLM_MODEL`, `LOCAL_LLM_TIMEOUT` – for local enrichment (see `settings.py`).[file:69]
+- `ENABLE_LLM_ENRICHMENT` – enable/disable AI enrichment.
+- Talis integration settings (`TALIS_API_URL`, etc.) if using push‑back.
 
-## Contributing  
+### 2. Build and start containers
 
-This project is developed for MMU Library Services but contributions are welcome.  
+```
+docker compose build
+docker compose up -d
+```
 
-### Areas for Contribution  
-- Additional OER provider integrations  
-- Improved Talis Aspire API support  
-- Quality scoring algorithms  
-- Accessibility enhancements  
-- Multi-language support  
-- Performance optimizations  
+The `web` container’s `docker-entrypoint.sh` will:[web:1]
 
-### Development Workflow  
-1. Fork the repository  
-2. Create a feature branch (`git checkout -b feature/new-harvester`)  
-3. Commit changes with clear messages  
-4. Push to your fork and submit a pull request  
+- Wait for Postgres (`pg_isready`).
+- Ensure the database exists and enable the `vector` extension.
+- Run `makemigrations` and `migrate`.
+- Create a default superuser (`admin` / `adminpass`) if one does not already exist.
 
----
+### 3. Access the application
 
-## License  
-[Specify license: MIT, GPL, Apache 2.0, etc.]  
+- Dashboard & AI Search: <http://localhost:8000/>  
+- Advanced Search: <http://localhost:8000/advanced-search/>  
+- Admin: <http://localhost:8000/admin/>
 
 ---
 
-## Acknowledgements  
-- Built on [sentence-transformers](https://www.sbert.net/) for semantic search  
+## Development Workflow
+
+> Best practice: run Django management commands inside the `web` container so DB settings remain consistent.
+
+Common commands:
+
+```
+# Shell into the web container
+docker compose exec web bash
+
+# Inside the container:
+python manage.py makemigrations
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py shell
+```
+
+For iterative frontend work, edit templates and static files on the host; Django’s auto‑reload inside the container will pick up changes.
 
 ---
 
-## Contact  
+## Roadmap & Contributions
 
-**Project Lead:** [Your Name]  
-**Institution:** Manchester Metropolitan University Library Services  
-**Repository:** https://github.com/MMU-Library/oer_rebirth  
+Potential next steps:
 
-For questions or collaboration inquiries, open an issue on GitHub or contact the development team.
+- Extend `search_engine._apply_filters` to fully exploit `isbn`, `issn`, and `oclc_number` filters from Advanced Search.[file:3][file:88]
+- Additional source presets and mapping helpers (e.g. per‑provider URL normalisation).
+- Richer per‑result diagnostics in Advanced Search (e.g. explicit “matched on ISBN/OCLC” messaging).
+- Expanded documentation for Talis workflows and best practices for OER remediation.
+
 
 ---
+
+## License & Credits
+
+- License: _TBC_ (add once selected).  
+- Uses libraries including Django, Celery, pgvector, `sentence-transformers`, `pymarc`, Bootstrap 5, and Chart.js.[web:1][file:3]  
+- Developed by Manchester Metropolitan University Library Services.
+
+```

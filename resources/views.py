@@ -603,11 +603,11 @@ def advanced_search(request):
             "ai_search": True,
             "advanced": True,
         }
-        return render(request, "resources/advanced_search.html", context)
+        return render(request, TEMPLATE_SEARCH, context)
 
     except Exception as e:
         messages.error(request, f"An error occurred during advanced search: {e}")
-        return render(request, "resources/advanced_search.html", {
+        return render(request, TEMPLATE_SEARCH, {
             "query": "",
             "detailed_results": [],
             "facets": {},
@@ -618,6 +618,7 @@ def advanced_search(request):
             "ai_search": True,
             "advanced": True,
         })
+
 
 # Home View - Use the existing template
 def home(request):
