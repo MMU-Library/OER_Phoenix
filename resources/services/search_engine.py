@@ -219,7 +219,8 @@ class OERSearchEngine:
         # Resource type filter
         if "resource_type" in filters and filters["resource_type"]:
             types = filters["resource_type"] if isinstance(filters["resource_type"], list) else [filters["resource_type"]]
-            qs = qs.filter(resource_type__in=types)
+            qs = qs.filter(normalised_type__in=types)
+
 
         # Subject filter
         if "subject" in filters and filters["subject"]:
@@ -277,8 +278,8 @@ class OERSearchEngine:
                 .order_by("-count")
             ),
             "resource_types": list(
-                qs.exclude(resource_type="")
-                .values("resource_type")
+                qs.exclude(normalised_type="")
+                .values("normalised_type")
                 .annotate(count=Count("id"))
                 .order_by("-count")
             ),

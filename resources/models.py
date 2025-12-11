@@ -172,6 +172,22 @@ class OERResource(models.Model):
     # Resource Type and Format
     resource_type = models.CharField(max_length=100, blank=True)
     format = models.CharField(max_length=100, blank=True)
+
+    RESOURCE_TYPE_CHOICES = [
+    ("book", "Book / Monograph"),
+    ("chapter", "Book Chapter"),
+    ("article", "Article"),
+    ("video", "Video"),
+    ("course", "Course / Module"),
+    ("other", "Other"),
+    ]
+    normalised_type = models.CharField(
+        max_length=50,
+        blank=True,
+        db_index=True,
+        choices=RESOURCE_TYPE_CHOICES,
+        help_text="Normalised internal type derived from source metadata."
+    )
     
     # AI/ML Fields
     content_embedding = VectorField(dimensions=384, null=True, blank=True)
@@ -231,8 +247,9 @@ class OERResource(models.Model):
         verbose_name_plural = "OER Resources"
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['title', 'source']),
-            models.Index(fields=['resource_type', 'language']),
+            models.Index(fields=["title", "source"]),
+            models.Index(fields=["resource_type", "language"]),
+            models.Index(fields=["normalised_type", "language"]),
         ]
     
     def __str__(self):

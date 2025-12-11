@@ -41,6 +41,39 @@ def _pick_primary_url(value):
     return http_urls[0]
 
 
+def _normalise_language(raw: str) -> str:
+    """Normalise dc:language values to ISO 639-1 where possible."""
+    if not raw:
+        return "en"
+    v = str(raw).strip().lower()
+    if v in ("en", "eng", "english"):
+        return "en"
+    if v in ("fr", "fre", "fra", "french"):
+        return "fr"
+    if v in ("de", "ger", "deu", "german"):
+        return "de"
+    if v in ("es", "spa", "spanish"):
+        return "es"
+    return v
+
+
+def _normalise_resource_type(raw_type: str) -> str:
+    """Map dc:type strings into internal normalised_type values."""
+    if not raw_type:
+        return ""
+    t = str(raw_type).strip().lower()
+    if "chapter" in t or "section" in t or "part" in t:
+        return "chapter"
+    if "book" in t or "monograph" in t or "textbook" in t:
+        return "book"
+    if "article" in t or "journal" in t or "paper" in t:
+        return "article"
+    if "video" in t or "lecture" in t or "recording" in t:
+        return "video"
+    if "course" in t or "module" in t or "unit" in t:
+        return "course"
+    return "other"
+
 
 class OAIHarvester(BaseHarvester):
     def __init__(self, source):
@@ -77,7 +110,7 @@ class OAIHarvester(BaseHarvester):
         title = None
         identifiers = []
         description = None
-        resource_type = None  # NEW
+        resource_type = None
 
         for elem in record_xml.findall(
             ".//{http://purl.org/dc/elements/1.1/}title"
@@ -113,7 +146,7 @@ class OAIHarvester(BaseHarvester):
             if d is not None and d.text:
                 description = d.text
 
-        # NEW: Extract resource type from dc:type
+        # Extract resource type from dc:type
         for elem in record_xml.findall(
             ".//{http://purl.org/dc/elements/1.1/}type"
         ):
@@ -126,15 +159,37 @@ class OAIHarvester(BaseHarvester):
             if t is not None and t.text:
                 resource_type = t.text
 
+        # Extract language(s) from dc:language
+        languages = []
+        for elem in record_xml.findall(
+            ".//{http://purl.org/dc/elements/1.1/}language"
+        ):
+            if elem.text:
+                languages.append(elem.text)
+        if not languages:
+            # try any language-like tag
+            for elem in record_xml.findall(".//language"):
+                if elem.text:
+                    languages.append(elem.text)
+
+        # Pick a primary language if available
+        lang = _normalise_language(languages[0]) if languages else "en"
+
         # Previously: url = identifiers (list) -> caused ONIX+URL list in url field
         primary_url = _pick_primary_url(identifiers)
+
+        # Ensure we always pass a string into _normalise_resource_type
+        raw_type = resource_type or ""
 
         return {
             "title": title,
             "url": primary_url,
             "description": description,
-            "resource_type": resource_type,  # NEW
+            "resource_type": resource_type,
+            "normalised_type": _normalise_resource_type(raw_type),
+            "language": lang,
         }
+
 
     def fetch_and_process_records(self):
         config = self._get_config()
