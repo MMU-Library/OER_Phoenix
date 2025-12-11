@@ -25,6 +25,7 @@ from .harvesters.oaipmh_harvester import OAIPMHHarvester
 from .harvesters.csv_harvester import CSVHarvester
 from .harvesters.preset_configs import PresetAPIConfigs, PresetOAIPMHConfigs
 
+
 # NEW: Talis import/analysis helpers for dashboard workflows
 from resources.services.talis import (
     parse_csv_to_talis_list,
@@ -56,6 +57,8 @@ TEMPLATE_EXPORT_DATA = 'admin/resources/export.html'
 TEMPLATE_CREATE_SOURCE = 'admin/resources/create_source.html'
 TEMPLATE_ADD_HARVESTER = 'admin/resources/add_harvester.html'
 TEMPLATE_OERSOURCE_HARVEST = 'admin/resources/oersource_harvest.html'
+TEMPLATE_ADVANCED_SEARCH = "resources/advanced_search.html"
+
 
 # NEW: session keys for dashboard Talis analysis
 TALIS_SESSION_KEY = "dashboard_talis_list"
@@ -447,23 +450,18 @@ def ai_search(request):
     except Exception as e:
         logger.error(f"Error in ai_search: {str(e)}")
         messages.error(request, "An error occurred during the search.")
-        return render(
-            request,
-            TEMPLATE_SEARCH,
-            {
-                "query": "",
-                "detailed_results": [],
-                "facets": {},
-                "applied_filters": {
-                    "sources": [],
-                    "languages": [],
-                    "resource_types": [],
-                    "subjects": [],
-                },
-                "sort_by": "relevance",
-                "ai_search": True,
+        return render(request, TEMPLATE_ADVANCED_SEARCH, {
+            "query": "",
+            "detailed_results": [],
+            "facets": {},
+            "applied_filters": {
+                "sources": [], "languages": [], "resource_types": [], "subjects": []
             },
-        )
+            "sort_by": "relevance",
+            "ai_search": True,
+            "advanced": True,
+        })
+
 
 def compare_view(request):
     """View for comparing multiple OER resources"""
@@ -617,7 +615,8 @@ def advanced_search(request):
             "ai_search": True,
             "advanced": True,
         }
-        return render(request, TEMPLATE_SEARCH, context)
+        return render(request, TEMPLATE_ADVANCED_SEARCH, context)
+
 
     except Exception as e:
         messages.error(request, f"An error occurred during advanced search: {e}")
