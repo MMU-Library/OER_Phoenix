@@ -1,4 +1,3 @@
-The updated README content can safely replace the existing one; it keeps the important Docker, stack, and usage details while adding the new search/advanced-search, identifiers, and MARCXML behaviour. Below is a streamlined, best‑practice version you can drop into `README.md`.
 
 ## Updated `README.md`
 
