@@ -235,10 +235,19 @@
           {% if type_counts.0 %}
             <p class="text-muted small mb-3">
               Most common type:
-              {{ type_counts.0.resource_type|default:"(unspecified)" }}
+              {{ type_counts.0.label|default:"(unspecified)" }}
               ({{ type_counts.0.count }} resources)
             </p>
           {% endif %}
+
+          <ul class="list-group list-group-flush">
+            {% for t in type_counts %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ t.label|default:"(unspecified)" }}
+                <span class="badge bg-secondary rounded-pill">{{ t.count }}</span>
+              </li>
+            {% endfor %}
+          </ul>
 
           <!-- Data Table -->
           <ul class="list-group list-group-flush">

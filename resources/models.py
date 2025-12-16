@@ -164,6 +164,24 @@ class OERResource(models.Model):
     # Resource Details
     license = models.CharField(max_length=100, blank=True)
     subject = models.CharField(max_length=200, blank=True)
+
+    # NEW: richer subject fields
+    subjects_raw = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="All subject strings from source metadata."
+    )
+    ai_subjects = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="AI-suggested subject labels."
+    )
+    primary_subject = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Preferred subject (source or AI-enriched)."
+    )
+
     level = models.CharField(max_length=100, blank=True)
     publisher = models.CharField(max_length=200, blank=True)
     author = models.CharField(max_length=200, blank=True)
@@ -174,12 +192,12 @@ class OERResource(models.Model):
     format = models.CharField(max_length=100, blank=True)
 
     RESOURCE_TYPE_CHOICES = [
-    ("book", "Book / Monograph"),
-    ("chapter", "Book Chapter"),
-    ("article", "Article"),
-    ("video", "Video"),
-    ("course", "Course / Module"),
-    ("other", "Other"),
+        ("book", "Book / Monograph"),
+        ("chapter", "Book Chapter"),
+        ("article", "Article"),
+        ("video", "Video"),
+        ("course", "Course / Module"),
+        ("other", "Other"),
     ]
     normalised_type = models.CharField(
         max_length=50,
@@ -188,7 +206,7 @@ class OERResource(models.Model):
         choices=RESOURCE_TYPE_CHOICES,
         help_text="Normalised internal type derived from source metadata."
     )
-    
+
     # AI/ML Fields
     content_embedding = VectorField(dimensions=384, null=True, blank=True)
     keywords = models.JSONField(default=list, blank=True)
@@ -219,19 +237,20 @@ class OERResource(models.Model):
         db_index=True,
         help_text="DOI string as provided (not URL)."
     )
-    
+
     # NEW: Translation fields for non-English resources
     title_en = models.CharField(
-        max_length=500, 
-        blank=True, 
+        max_length=500,
+        blank=True,
         null=True,
         help_text="English translation of title (auto-generated during harvest)"
     )
     description_en = models.TextField(
-        blank=True, 
+        blank=True,
         null=True,
         help_text="English translation of description (auto-generated during harvest)"
     )
+
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)

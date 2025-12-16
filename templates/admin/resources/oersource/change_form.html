@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <div class="config-section">
         <div class="preset-title">🌐 API Sources</div>
-        <p>Configure API-based OER sources</p>
+        <p>API-based OER sources – metadata quality varies by provider; often good for fresher data and incremental updates.</p>
         <div class="preset-grid">
             <button type="button" class="preset-button specific" data-type="API" onclick="applyPreset('API', 'oapen')">OAPEN REST API</button>
             <button type="button" class="preset-button specific" data-type="API" onclick="applyPreset('API', 'oapen_books')">OAPEN (Books)</button>
@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <div class="config-section">
         <div class="preset-title">📚 OAI-PMH Sources</div>
-        <p>Configure OAI-PMH compatible repositories</p>
+        <p>OAI-PMH repositories – good general Dublin Core metadata; type/detail depends on each repository’s implementation.</p>
         <div class="preset-grid">
             <button type="button" class="preset-button specific" data-type="OAIPMH" onclick="applyPreset('OAIPMH', 'oapen')">OAPEN OAI-PMH</button>
             <button type="button" class="preset-button specific" data-type="OAIPMH" onclick="applyPreset('OAIPMH', 'doab')">DOAB OAI-PMH</button>
@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <div class="config-section">
         <div class="preset-title">📊 CSV Sources</div>
-        <p>Configure CSV file sources</p>
+        <p>CSV file sources – simple curated lists; often less frequently updated and may omit richer relationships.</p>
         <div class="preset-grid">
             <button type="button" class="preset-button specific" data-type="CSV" onclick="applyPreset('CSV', 'oer_commons')">OER Commons</button>
             <button type="button" class="preset-button specific" data-type="CSV" onclick="applyPreset('CSV', 'skills_commons')">Skills Commons</button>
@@ -116,11 +116,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <div class="config-section">
         <div class="preset-title">📜 MARCXML / Dump Sources</div>
-        <p>Configure MARCXML dump-based sources for book-level imports</p>
+        <p>MARCXML dumps – richest bibliographic metadata; best for book/chapter typing, identifiers, and subject fields.</p>
         <div class="preset-grid">
             <button type="button" class="preset-button specific" data-type="MARCXML" onclick="applyPreset('MARCXML', 'oapen')">OAPEN MARCXML</button>
             <button type="button" class="preset-button specific" data-type="MARCXML" onclick="applyPreset('MARCXML', 'doab')">DOAB MARCXML</button>
         </div>
     </div>
+
 </div>
 {% endblock %}

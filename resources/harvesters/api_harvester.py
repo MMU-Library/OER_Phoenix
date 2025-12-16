@@ -4,6 +4,8 @@ import time
 from resources.harvesters.utils import request_with_retry
 from resources.harvesters.base_harvester import BaseHarvester
 from django.core.exceptions import ValidationError
+from resources.harvesters.ingestion import ingest_record_dict
+
 
 
 logger = logging.getLogger(__name__)
@@ -178,3 +180,5 @@ class APIHarvester(BaseHarvester):
 
         logger.info(f"Processed {len(processed_records)} records from API")
         return processed_records
+
+

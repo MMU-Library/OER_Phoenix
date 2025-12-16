@@ -9,6 +9,7 @@ from django.core import serializers
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import models
+from django.db.models import Count
 from .harvesters.preset_configs import PRESET_CONFIGS
 import csv
 import io
@@ -92,54 +93,90 @@ def dashboard_view(request):
 
         type_counts = (
             OERResource.objects.filter(is_active=True)
-            .values("resource_type")
+            .values("normalised_type")
             .annotate(count=models.Count("id"))
             .order_by("-count")
         )
 
-        # Count sources with resources
-        sources_with_counts = (
-            OERSource.objects.filter(is_active=True)
-            .annotate(count=models.Count('resources'))
-            .order_by('-count')
-        )
-
-        # Prepare chart data for resource type breakdown
         chart_labels = []
         chart_data = []
         chart_colors = [
-            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-            '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+            "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF",
+            "#FF9F40", "#FF6384", "#C9CBCF", "#4BC0C0", "#FF6384",
         ]
-        
-        for idx, type_info in enumerate(type_counts):
-            resource_type = type_info['resource_type'] if type_info['resource_type'] else 'Unspecified'
-            chart_labels.append(resource_type)
-            chart_data.append(type_info['count'])
+
+        for idx, typeinfo in enumerate(type_counts):
+            code = (typeinfo["normalised_type"] or "").strip()
+            if not code:
+                label = "Unspecified"
+            elif code == "book":
+                label = "Books"
+            elif code == "chapter":
+                label = "Chapters"
+            elif code == "article":
+                label = "Articles"
+            elif code == "video":
+                label = "Videos"
+            elif code == "course":
+                label = "Courses"
+            else:
+                label = "Other"
+            chart_labels.append(label)
+            chart_data.append(typeinfo["count"])
 
         # Convert to JSON for JavaScript consumption
         chart_labels_json = json.dumps(chart_labels)
         chart_data_json = json.dumps(chart_data)
-        chart_colors_json = json.dumps(chart_colors[:len(chart_data)])
+        chart_colors_json = json.dumps(chart_colors[: len(chart_data)])
+
+        sources_with_counts = (
+            OERSource.objects.filter(is_active=True)
+            .annotate(count=models.Count("resources"))
+            .order_by("-count")
+        )
 
         stats = {
-            'total_resources': OERResource.objects.filter(is_active=True).count(),
-            'distinct_subjects': OERResource.objects.filter(is_active=True).exclude(subject="").values('subject').distinct().count(),
-            'active_sources': sources_with_counts.count(),
+            "total_resources": OERResource.objects.filter(is_active=True).count(),
+            "distinct_subjects": (
+                OERResource.objects.filter(is_active=True)
+                .exclude(subject="")
+                .values("subject")
+                .distinct()
+                .count()
+            ),
+            "active_sources": sources_with_counts.count(),
         }
+
+        display_type_counts = []
+        for row in type_counts:
+            code = (row["normalised_type"] or "").strip()
+            if not code:
+                label = "(unspecified)"
+            elif code == "book":
+                label = "Books"
+            elif code == "chapter":
+                label = "Chapters"
+            elif code == "course":
+                label = "Courses"
+            else:
+                label = "Other"
+            display_type_counts.append(
+                {"code": code or "unspecified", "label": label, "count": row["count"]}
+            )
 
         context = {
             "recent_resources": recent_resources,
             "top_subjects": top_subjects,
-            "type_counts": type_counts,
+            "type_counts": display_type_counts,
             "sources": sources_with_counts,
             "stats": stats,
             "chart_labels": chart_labels_json,
             "chart_data": chart_data_json,
             "chart_colors": chart_colors_json,
         }
-        
+
         return render(request, "resources/dashboard.html", context)
+
 
     except Exception as e:
         logger.error(f"Error in dashboard_view: {str(e)}")

@@ -2,9 +2,17 @@ from abc import ABC, abstractmethod
 import logging
 from django.utils import timezone
 import resources.harvesters.utils as utils
+from resources.models import OERResource
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_TYPES = {"book", "chapter", "article", "video", "course", "other"}
+
+def _coerce_normalised_type(raw):
+    if not raw:
+        return None
+    raw_str = str(raw).strip().lower()
+    return raw_str if raw_str in ALLOWED_TYPES else None
 
 class BaseHarvester(ABC):
     """Shared harvester base class providing common harvest flow and helpers.
@@ -41,35 +49,45 @@ class BaseHarvester(ABC):
     def upsert_resource(self, record_data):
         # Ensure URL key exists for matching; empty URL leads to skipped upsert outside
         try:
-            # import model lazily
-            from resources.models import OERResource
-            # Sanitize/truncate fields to fit model max_length constraints
+            from resources.models import OERResource  # lazy import OK
+
             def _t(v, maxlen=None):
                 if v is None:
-                    return ''
+                    return ""
                 s = str(v)
                 if maxlen and len(s) > maxlen:
                     return s[:maxlen]
                 return s
 
+            normalised_type = _coerce_normalised_type(
+                record_data.get("normalised_type")
+            )
+            resource_type = _t(record_data.get("resource_type", ""), maxlen=100)
+
             defaults = {
-                'title': _t(record_data.get('title', ''), maxlen=500),
-                'description': record_data.get('description', ''),
-                'license': _t(record_data.get('license', ''), maxlen=100),
-                'publisher': _t(record_data.get('publisher', ''), maxlen=200),
-                'author': _t(record_data.get('author', ''), maxlen=200),
-                'language': _t(record_data.get('language', 'en'), maxlen=50),
-                'resource_type': _t(record_data.get('resource_type', ''), maxlen=100),
-                'source': self.source
+                "title": _t(record_data.get("title", ""), maxlen=500),
+                "description": record_data.get("description", ""),
+                "license": _t(record_data.get("license", ""), maxlen=100),
+                "publisher": _t(record_data.get("publisher", ""), maxlen=200),
+                "author": _t(record_data.get("author", ""), maxlen=200),
+                "language": _t(record_data.get("language", "en"), maxlen=50),
+                "subject": _t(record_data.get("subject", ""), maxlen=500),
+                "resource_type": resource_type,
+                "normalised_type": normalised_type,
+                "isbn": _t(record_data.get("isbn", ""), maxlen=50),
+                "issn": _t(record_data.get("issn", ""), maxlen=50),
+                "oclc_number": _t(record_data.get("oclc_number", ""), maxlen=50),
+                "doi": _t(record_data.get("doi", ""), maxlen=255),
+                "source": self.source,
             }
 
             resource, created = OERResource.objects.update_or_create(
-                url=_t(record_data.get('url', ''), maxlen=500),
-                defaults=defaults
+                url=_t(record_data.get("url", ""), maxlen=500),
+                defaults=defaults,
             )
             return resource, created
         except Exception:
-            logger.exception('Failed to upsert resource')
+            logger.exception("Failed to upsert resource")
             raise
 
     def request(self, method, url, headers=None, params=None, timeout=15, max_attempts=3):

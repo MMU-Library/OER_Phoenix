@@ -333,16 +333,16 @@
         {% if facets.subjects %}
           <div class="mb-3">
             <h6 class="mb-2">Subject Area</h6>
-            {% for subj in facets.subjects|slice:":10" %}
+            {% for subj in facets.subjects %}
               <div class="form-check">
                 <input class="form-check-input"
-                       type="checkbox"
-                       name="subject"
-                       value="{{ subj.subject }}"
-                       id="adv_subj_{{ forloop.counter }}"
-                       {% if subj.subject in applied_filters.subjects %}checked{% endif %}>
-                <label class="form-check-label small" for="adv_subj_{{ forloop.counter }}">
-                  {{ subj.subject|truncatewords:3 }} ({{ subj.count }})
+                      type="checkbox"
+                      name="subject"
+                      value="{{ subj.primary_subject }}"
+                      id="subj_{{ forloop.counter }}"
+                      {% if subj.primary_subject in applied_filters.subjects %}checked{% endif %}>
+                <label class="form-check-label small" for="subj_{{ forloop.counter }}">
+                  {{ subj.primary_subject }} ({{ subj.count }})
                 </label>
               </div>
             {% endfor %}

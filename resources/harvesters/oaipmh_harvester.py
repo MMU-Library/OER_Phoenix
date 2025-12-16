@@ -58,10 +58,15 @@ def _normalise_language(raw: str) -> str:
 
 
 def _normalise_resource_type(raw_type: str) -> str:
-    """Map dc:type strings into internal normalised_type values."""
     if not raw_type:
         return ""
     t = str(raw_type).strip().lower()
+
+    # OAPEN / DOAB specific strings
+    if t in ("book", "monograph", "text", "book (monograph)"):
+        return "book"
+    if "chapter" in t or "section" in t or "part" in t:
+        return "chapter"
     if "chapter" in t or "section" in t or "part" in t:
         return "chapter"
     if "book" in t or "monograph" in t or "textbook" in t:

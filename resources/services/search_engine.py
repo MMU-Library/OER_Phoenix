@@ -225,7 +225,7 @@ class OERSearchEngine:
         # Subject filter
         if "subject" in filters and filters["subject"]:
             subjects = filters["subject"] if isinstance(filters["subject"], list) else [filters["subject"]]
-            qs = qs.filter(subject__in=subjects)
+            qs = qs.filter(primary_subject__in=subjects)
 
         # Educational level filter
         if "level" in filters and filters["level"]:
@@ -266,8 +266,8 @@ class OERSearchEngine:
 
         facets = {
             "subjects": list(
-                qs.exclude(subject="")
-                .values("subject")
+                qs.exclude(primary_subject="")
+                .values("primary_subject")
                 .annotate(count=Count("id"))
                 .order_by("-count")[:20]
             ),
