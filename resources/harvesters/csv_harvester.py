@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from resources.harvesters.utils import request_with_retry
 from resources.harvesters.base_harvester import BaseHarvester
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -150,9 +151,15 @@ class CSVHarvester(BaseHarvester):
                 or r.get("type")
                 or r.get("Type")
             )
+
+            # NEW: subject / keywords mapping
             subject = (
                 r.get("subject")
                 or r.get("Subject")
+                or r.get("subjects")
+                or r.get("Subjects")
+                or r.get("keywords")
+                or r.get("Keywords")
                 or r.get("category")
             )
 

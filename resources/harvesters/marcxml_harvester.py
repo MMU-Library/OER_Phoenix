@@ -3,6 +3,7 @@ import io
 from django.utils import timezone
 from resources.harvesters.base_harvester import BaseHarvester
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -112,6 +113,15 @@ class MARCXMLHarvester(BaseHarvester):
                         description = ds[0]
                         break
 
+                # subjects: 6XX fields, subfield a (very simple)
+                subjects = []
+                for tag in ("600", "610", "611", "630", "650", "651"):
+                    for f in mr.get_fields(tag):
+                        subs = f.get_subfields("a")
+                        if subs:
+                            subjects.extend(subs)
+                subject_str = "; ".join(s.strip() for s in subjects if s and s.strip())
+
                 language = mr.language() if hasattr(mr, "language") else ""
 
                 records.append(
@@ -126,6 +136,7 @@ class MARCXMLHarvester(BaseHarvester):
                         "resource_type": "book",
                         "normalised_type": _normalise_resource_type("book"),
                         "isbn": isbn,
+                        "subject": subject_str,
                     }
                 )
 
@@ -195,6 +206,15 @@ class MARCXMLHarvester(BaseHarvester):
                         description = d
                         break
 
+                # subjects from 6XX fields, subfield a
+                subjects = []
+                for tag in ("600", "610", "611", "630", "650", "651"):
+                    for df in find_datafields(tag):
+                        s = subfield_text(df, "a")
+                        if s:
+                            subjects.append(s)
+                subject_str = "; ".join(s.strip() for s in subjects if s and s.strip())
+
                 controlfield_008 = rec_el.find(
                     ".//marc:controlfield[@tag='008']", ns
                 )
@@ -218,6 +238,7 @@ class MARCXMLHarvester(BaseHarvester):
                         "resource_type": "book",
                         "normalised_type": _normalise_resource_type("book"),
                         "isbn": isbn,
+                        "subject": subject_str,
                     }
                 )
 

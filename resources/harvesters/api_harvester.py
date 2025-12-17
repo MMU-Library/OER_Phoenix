@@ -153,12 +153,22 @@ class APIHarvester(BaseHarvester):
                 raw_lang = record.get("language", "en")
                 raw_type = record.get("resource_type", record.get("type", ""))
 
+                # subject / keywords normalisation
+                subj = (
+                    record.get("subject")
+                    or record.get("subjects")
+                    or record.get("keywords")
+                    or record.get("categories")
+                    or record.get("category")
+                    or ""
+                )
+                if isinstance(subj, (list, tuple)):
+                    subj = "; ".join(str(s).strip() for s in subj if s)
+
                 resource_data = {
                     "title": record.get("title", record.get("name", "")),
                     "description": record.get("description", record.get("summary", "")),
-                    "url": record.get(
-                        "url", record.get("link", record.get("identifier", ""))
-                    ),
+                    "url": record.get("url", record.get("link", record.get("identifier", ""))),
                     "license": record.get("license", record.get("rights", "")),
                     "publisher": record.get("publisher", record.get("provider", "")),
                     "author": record.get(
@@ -167,7 +177,7 @@ class APIHarvester(BaseHarvester):
                     "language": _normalise_language(raw_lang),
                     "resource_type": raw_type,
                     "normalised_type": _normalise_resource_type(raw_type),
-                    "subject": record.get("subject", record.get("category", "")),
+                    "subject": subj,
                 }
 
                 # Require at least title and URL
