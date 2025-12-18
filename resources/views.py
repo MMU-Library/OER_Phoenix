@@ -25,6 +25,7 @@ from .harvesters.api_harvester import APIHarvester
 from .harvesters.oaipmh_harvester import OAIPMHHarvester
 from .harvesters.csv_harvester import CSVHarvester
 from .harvesters.preset_configs import PresetAPIConfigs, PresetOAIPMHConfigs
+from .harvesters.marcxml_harvester import MARCXMLHarvester
 
 
 # NEW: Talis import/analysis helpers for dashboard workflows
@@ -810,6 +811,8 @@ def harvest_view(request, source_id):
                 harvester = OAIPMHHarvester(source)
             elif source.source_type == 'CSV':
                 harvester = CSVHarvester(source)
+            elif source.source_type == "MARCXML":
+                harvester = MARCXMLHarvester(source)
             else:
                 messages.error(request, f"Unsupported harvester type: {source.source_type}")
                 return redirect('admin:resources_oersource_changelist')
@@ -840,6 +843,8 @@ def test_connection_view(request, source_id):
             harvester = OAIPMHHarvester(source)
         elif source.source_type == 'CSV':
             harvester = CSVHarvester(source)
+        elif source.source_type == "MARCXML":
+            harvester = MARCXMLHarvester(source)
         else:
             messages.error(request, f"Unsupported harvester type: {source.source_type}")
             return redirect('admin:resources_oersource_changelist')
@@ -959,27 +964,27 @@ def load_configuration_form(request):
 
 @staff_required
 def add_preset_view(request):
-    """Add preset harvester view - Admin template"""
-    harvester_type = request.GET.get('type', 'API')
-    form_class = get_form_class(harvester_type)
-    
-    if not form_class:
+    """
+    Add preset harvester view - Admin template.
+
+    Shows the appropriate preset list for the chosen harvester type
+    (API, OAIPMH, CSV, or MARCXML).
+    """
+    harvester_type = request.GET.get("type", "API")
+
+    # Basic guard: only allow known types
+    if harvester_type not in PRESET_CONFIGS:
         messages.error(request, "Invalid harvester type.")
-        return redirect('admin:resources_oersource_changelist')
-        
-    if request.method == 'POST':
-        form = form_class(request.POST)
-        if form.is_valid():
-            source = form.save()
-            messages.success(request, f"Successfully created {harvester_type} source: {source.name}")
-            return redirect('admin:resources_oersource_changelist')
-    else:
-        form = form_class()
-    
-    return render(request, TEMPLATE_ADD_HARVESTER, {
-        'form': form,
-        'harvester_type': harvester_type
-    })
+        return redirect("admin:resources_oersource_changelist")
+
+    presets = PRESET_CONFIGS.get(harvester_type, {})
+
+    context = {
+        "harvester_type": harvester_type,
+        "presets": presets,
+    }
+    return render(request, TEMPLATE_ADD_HARVESTER, context)
+
 
 @staff_required
 def apply_preset_view(request):
