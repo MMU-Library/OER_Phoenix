@@ -52,7 +52,13 @@ def generate_embeddings(batch_size=50):
     total = qs.count()
     for start in range(0, total, batch_size):
         batch = list(qs[start:start + batch_size])
-        texts = [f"{r.title} {r.description or ''}" for r in batch]
+        # Prefer extracted_text where available
+        texts = []
+        for r in batch:
+            if getattr(r, 'extracted_text', None):
+                texts.append(r.extracted_text)
+            else:
+                texts.append(f"{r.title} {r.description or ''}")
         embeddings = model.encode(texts, show_progress_bar=False)
         for resource, emb in zip(batch, embeddings):
             try:
@@ -76,7 +82,11 @@ def compute_and_store_embedding_for_resource(resource_id):
         return False
 
     model = get_embedding_model()
-    text = f"{resource.title} {resource.description or ''}"
+    # Prefer extracted_text if present
+    if getattr(resource, 'extracted_text', None):
+        text = resource.extracted_text
+    else:
+        text = f"{resource.title} {resource.description or ''}"
     emb = model.encode([text])[0]
     try:
         resource.content_embedding = emb.tolist() if hasattr(emb, 'tolist') else list(emb)

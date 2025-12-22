@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import OERResource
-from .tasks import generate_embedding_for_resource
+from .tasks import generate_embedding_for_resource, fetch_and_extract_content
 
 
 
@@ -16,10 +16,25 @@ def enqueue_embedding_on_save(sender, instance, created, **kwargs):
         if created:
             # New resource -> compute embedding
             generate_embedding_for_resource.delay(instance.id)
+            # Also enqueue content extraction if URL present
+            try:
+                url = getattr(instance, 'url', None)
+                if url:
+                    fetch_and_extract_content.delay(instance.id)
+            except Exception:
+                pass
         else:
             # Updated resource: compute only if missing embedding
             if not instance.content_embedding:
                 generate_embedding_for_resource.delay(instance.id)
+            # If resource has a URL but no content_hash, enqueue extraction
+            try:
+                url = getattr(instance, 'url', None)
+                content_hash = getattr(instance, 'content_hash', None)
+                if url and not content_hash:
+                    fetch_and_extract_content.delay(instance.id)
+            except Exception:
+                pass
     except Exception:
         # Avoid raising from signals
         pass

@@ -162,3 +162,68 @@ def enrich_resource_metadata(resource: OERResource) -> EnrichmentResult:
 
 def enrich_queryset(qs) -> List[EnrichmentResult]:
     return [enrich_resource_metadata(res) for res in qs]
+
+
+def enrich_resource_with_extracted_text(resource: OERResource, text: str) -> EnrichmentResult:
+    """
+    Enrich resource using a snippet of extracted text (preferable to short descriptions).
+    """
+    updated_fields: List[str] = []
+    try:
+        if not text:
+            return EnrichmentResult(resource=resource, updated_fields=[], skipped=True)
+
+        # Build prompt that includes an excerpt of the extracted text
+        excerpt = Truncator(text).chars(4000)
+        client = LLMClient()
+        prompt_parts = [
+            f"Title: {resource.title}",
+            f"URL: {resource.url}",
+            "",
+            "Passage from resource:",
+            excerpt,
+            "",
+            (
+                "Act as a librarian. Based on the passage above, produce improved metadata. "
+                "Return ONLY valid JSON with keys: description (string), keywords (list), subjects (list), language (string or null)."
+            ),
+        ]
+        prompt = "\n".join(p for p in prompt_parts if p)
+
+        data = {}
+        try:
+            data = client.complete_json(prompt=prompt, max_tokens=1024)
+        except Exception as e:
+            logger.warning("LLM call failed during extracted-text enrichment for %s: %s", getattr(resource, 'id', '?'), e)
+            data = {}
+
+        new_description = (data.get('description') or '').strip()
+        new_keywords = data.get('keywords') or []
+        new_subjects = data.get('subjects') or []
+        new_language = (data.get('language') or '').strip()
+
+        # Apply conservative updates
+        if new_description and (not resource.description or len(resource.description) < 120):
+            resource.description = new_description
+            updated_fields.append('description')
+
+        if new_keywords and not resource.keywords:
+            resource.keywords = new_keywords
+            updated_fields.append('keywords')
+
+        if new_subjects and not resource.subject:
+            resource.subject = " / ".join(new_subjects)[:255]
+            updated_fields.append('subject')
+
+        if new_language and not resource.language:
+            resource.language = new_language[:50]
+            updated_fields.append('language')
+
+        if updated_fields:
+            resource.save(update_fields=updated_fields)
+
+        return EnrichmentResult(resource=resource, updated_fields=updated_fields, skipped=False)
+
+    except Exception as e:
+        logger.exception('Extracted-text enrichment failed for %s: %s', getattr(resource, 'id', '?'), e)
+        return EnrichmentResult(resource=resource, updated_fields=[], skipped=False, error=str(e))

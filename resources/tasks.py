@@ -7,6 +7,8 @@ from celery.utils.log import get_task_logger
 from django.utils import timezone
 import requests
 from .models import TalisPushJob
+from .services import content_extractor
+from .services import metadata_enricher
 
 
 logger = get_task_logger(__name__)
@@ -45,6 +47,70 @@ def generate_embedding_for_resource(self, resource_id):
         return success
     except Exception as e:
         raise self.retry(countdown=30, exc=e)
+
+
+@shared_task(bind=True, max_retries=3)
+def fetch_and_extract_content(self, resource_id):
+    """Download the resource URL, extract text (PDF or HTML), save to model, and trigger enrichment."""
+    try:
+        resource = OERResource.objects.get(id=resource_id)
+    except OERResource.DoesNotExist:
+        logger.error("Resource %s not found", resource_id)
+        return False
+
+    url = getattr(resource, 'url', None)
+    if not url:
+        logger.info("Resource %s has no URL to fetch", resource_id)
+        return False
+
+    try:
+        result = content_extractor.fetch_and_extract(url)
+    except Exception as e:
+        # Be defensive: treat HTTP 404 as terminal regardless of exception type
+        resp = getattr(e, 'response', None)
+        status = None
+        try:
+            status = resp.status_code if resp is not None else None
+        except Exception:
+            status = None
+
+        message = str(e) or ''
+        if status == 404 or '404' in message:
+            logger.warning("Resource %s returned 404; marking as unavailable and skipping retries", resource_id)
+            resource.extracted_text = ''
+            resource.content_hash = f'HTTP/404'
+            resource.content_source_type = 'other'
+            resource.extracted_at = timezone.now()
+            resource.save(update_fields=['extracted_text', 'content_hash', 'content_source_type', 'extracted_at'])
+            return True
+
+        logger.exception("Failed to fetch/extract content for %s: %s", resource_id, e)
+        # Retry for other errors
+        raise self.retry(countdown=60, exc=e)
+
+    content_hash = result.get('content_hash')
+    # Skip if unchanged
+    if content_hash and resource.content_hash == content_hash and resource.extracted_text:
+        logger.info("Resource %s content unchanged (hash match), skipping", resource_id)
+        return True
+
+    text = result.get('text') or ''
+    source_type = result.get('source_type') or ''
+
+    # Save extracted text and metadata
+    resource.extracted_text = text[:200000] if text else ''
+    resource.content_hash = content_hash or ''
+    resource.content_source_type = source_type
+    resource.extracted_at = timezone.now()
+    resource.save(update_fields=['extracted_text', 'content_hash', 'content_source_type', 'extracted_at'])
+
+    # Trigger enrichment using extracted text
+    try:
+        metadata_enricher.enrich_resource_with_extracted_text(resource, text)
+    except Exception:
+        logger.exception('Enrichment after extraction failed for resource %s', resource_id)
+
+    return True
 
 @shared_task
 def export_to_talis(resource_ids, title, description):

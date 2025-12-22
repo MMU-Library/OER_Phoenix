@@ -49,3 +49,21 @@ tmp/
 # OS / misc
 .DS_Store
 Thumbs.db
+
+# Testing / caches
+.pytest_cache/
+.mypy_cache/
+.cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Packaging
+*.egg-info/
+pip-wheel-metadata/
+
+# Misc
+.python-version
+.ipynb_checkpoints/
+*.swp
+*.swo

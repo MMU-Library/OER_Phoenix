@@ -212,6 +212,17 @@ class OERResource(models.Model):
     keywords = models.JSONField(default=list, blank=True)
     ai_generated_summary = models.TextField(blank=True)
 
+    # Extracted content (for LLM/enrichment)
+    extracted_text = models.TextField(blank=True, null=True, help_text="Normalized extracted text from linked PDF or webpage")
+    content_hash = models.CharField(max_length=64, blank=True, db_index=True, help_text="Hash of downloaded content to avoid re-processing")
+    extracted_at = models.DateTimeField(null=True, blank=True, help_text="When content was extracted")
+    CONTENT_SOURCE_CHOICES = [
+        ('pdf', 'PDF'),
+        ('html', 'HTML'),
+        ('other', 'Other'),
+    ]
+    content_source_type = models.CharField(max_length=20, choices=CONTENT_SOURCE_CHOICES, blank=True, help_text="Detected content type for extracted_text")
+
     # Standard identifiers
     isbn = models.CharField(
         max_length=32,

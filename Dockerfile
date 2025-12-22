@@ -12,8 +12,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-extras.txt ./
+# Install core requirements first, then optional extraction extras
+RUN pip install --no-cache-dir -r requirements.txt \
+    && if [ -f requirements-extras.txt ]; then pip install --no-cache-dir -r requirements-extras.txt; fi
 
 # Copy project files
 COPY . .

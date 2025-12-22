@@ -3,11 +3,20 @@
 /contextonly-notinproject/
 /static/
 /media/
-/resources/migrations/
 /.continue/
 /.env.example
 *.bk
 __pycache__/
+
+# General excludes
+.git
+.github
+.pytest_cache/
+.mypy_cache/
+.cache/
+.ipynb_checkpoints/
+*.egg-info/
+pip-wheel-metadata/
 
 # Keep existing rules
 *.env
