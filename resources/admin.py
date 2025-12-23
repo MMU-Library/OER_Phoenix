@@ -21,6 +21,7 @@ from resources.harvesters.oaipmh_harvester import OAIPMHHarvester
 from resources.harvesters.csv_harvester import CSVHarvester
 from resources.harvesters.marcxml_harvester import MARCXMLHarvester
 from resources.forms import OERSourceForm  # Import the unified form
+from resources.harvesters.kbart_harvester import KBARTHarvester
 from resources.services import ai_utils  # NEW: for embedding generation
 from resources.services import metadata_enricher
 
@@ -218,6 +219,19 @@ class OERSourceAdmin(admin.ModelAdmin):
                 obj.status = 'active'
         
         super().save_model(request, obj, form, change)
+
+        # If a KBART file was uploaded in the admin form, process it immediately
+        try:
+            kbart_file = None
+            if hasattr(form, 'cleaned_data'):
+                kbart_file = form.cleaned_data.get('kbart_file')
+
+            if kbart_file:
+                harvester = KBARTHarvester()
+                job = harvester.harvest_from_fileobj(obj, kbart_file)
+                self.message_user(request, f"KBART import complete: created={job.resources_created} updated={job.resources_updated} failed={job.resources_failed}")
+        except Exception as e:
+            self.message_user(request, f"KBART import failed: {e}", level=messages.ERROR)
 
     def status_badge(self, obj):
         colors = {

@@ -201,6 +201,20 @@ class PresetCSVConfigs:
             "max_resources_per_harvest": 10000,
         }
 
+    @staticmethod
+    def get_kbart_tsv_config():
+        """KBART (TSV) import preset - used for publisher KBART files and similar exports."""
+        return {
+            "name": "KBART (TSV)",
+            "description": "KBART-compliant TSV listing of serials/works; upload or provide URL to import.",
+            # csv_url can be provided by user when creating source from preset
+            "csv_url": "",
+            "request_params": {},
+            "request_headers": {},
+            "harvest_schedule": "manual",
+            "max_resources_per_harvest": 10000,
+        }
+
 
 # Combined preset registry for easy access
 PRESET_CONFIGS = {
@@ -223,6 +237,7 @@ PRESET_CONFIGS = {
     "CSV": {
         "oer_commons": PresetCSVConfigs.get_oer_commons_csv_config(),
         "skills_commons": PresetCSVConfigs.get_skills_commons_csv_config(),
+        "kbart": PresetCSVConfigs.get_kbart_tsv_config(),
     },
 }
 

@@ -41,3 +41,14 @@ pymarc>=5.0.0                # MARCXML/metadata support
 
 # Pin any other specialized libs below as needed for your ingest/export/AI routines
 
+# Optional extras for content extraction
+requests>=2.31.0
+pypdf>=3.0.0
+beautifulsoup4>=4.12.0
+readability-lxml>=0.8.1
+# Optional: Apache Tika client if you run a Tika server
+tika>=1.24
+# Optional OCR: pytesseract (requires Tesseract binary)
+pytesseract>=0.3.10
+# Testing tools
+pytest>=7.0

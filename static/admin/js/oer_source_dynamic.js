@@ -110,6 +110,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Attach known fields
     ['id_api_endpoint','id_request_headers','id_request_params'].forEach(f => attachFieldRowClass(f, 'api-config'));
     ['id_oaipmh_url','id_oaipmh_set_spec'].forEach(f => attachFieldRowClass(f, 'oaipmh-config'));
-    ['id_csv_url'].forEach(f => attachFieldRowClass(f, 'csv-config'));
+    ['id_csv_url', 'id_kbart_file'].forEach(f => attachFieldRowClass(f, 'csv-config'));
     ['id_marcxml_url'].forEach(f => attachFieldRowClass(f, 'marcxml-config'));
 });

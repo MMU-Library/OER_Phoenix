@@ -25,6 +25,7 @@ urlpatterns = [
     path('download-csv/', views.csv_download, name='csv_download'),
     path('upload-csv/', views.csv_upload, name='csv_upload'),  # Admin template
     path('bulk-csv-upload/', views.bulk_csv_upload, name='bulk_csv_upload'),  # Admin template
+    path('upload-kbart/', views.kbart_upload, name='kbart_upload'),  # Admin KBART upload
 
     # Export operations - mixed templates
     path('export/', views.export_resources, name='export_resources'),  # Resources template

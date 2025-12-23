@@ -21,6 +21,7 @@ from .forms import (
     CSVUploadForm, ExportForm, APIHarvesterForm, OAIPMHHarvesterForm,
     CSVHarvesterForm, TalisExportForm, HarvesterTypeForm
 )
+from .forms import KBARTUploadForm
 from .harvesters.api_harvester import APIHarvester
 from .harvesters.oaipmh_harvester import OAIPMHHarvester
 from .harvesters.csv_harvester import CSVHarvester
@@ -732,6 +733,58 @@ def csv_upload(request):
         logger.error(f"Error in csv_upload: {str(e)}")
         messages.error(request, "An error occurred during file upload.")
         return redirect('resources:csv_upload')
+
+
+@staff_required
+def kbart_upload(request):
+    """Upload or provide a URL for a KBART (TSV) file and import as OERResources."""
+    try:
+        # Preselect source if provided in querystring
+        preselected_source_id = request.GET.get('source_id') or request.POST.get('source_id')
+
+        if request.method == 'POST':
+            form = KBARTUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                kbart_file = form.cleaned_data.get('kbart_file')
+                kbart_url = form.cleaned_data.get('kbart_url')
+                source = form.cleaned_data.get('source')
+                create_name = form.cleaned_data.get('create_source_name')
+
+                # Resolve or create source
+                if not source and create_name:
+                    source = OERSource.objects.create(name=create_name, display_name=create_name, source_type='CSV')
+
+                if not source:
+                    messages.error(request, "Please select a source or provide a name to create one.")
+                    return redirect('resources:kbart_upload')
+
+                harvester = None
+                from .harvesters.kbart_harvester import KBARTHarvester
+                harvester = KBARTHarvester()
+
+                if kbart_file:
+                    # process uploaded file directly
+                    job = harvester.harvest_from_fileobj(source, kbart_file)
+                else:
+                    # path is URL
+                    job = harvester.harvest_from_path(source, kbart_url)
+
+                messages.success(request, f"KBART harvest completed: created={job.resources_created} updated={job.resources_updated} failed={job.resources_failed}")
+                return redirect('resources:kbart_upload')
+            else:
+                messages.error(request, "Invalid form submission.")
+                return redirect('resources:kbart_upload')
+        else:
+            initial = {}
+            if preselected_source_id:
+                initial['source'] = preselected_source_id
+            form = KBARTUploadForm(initial=initial)
+
+        return render(request, 'admin/resources/kbart_upload.html', {'form': form})
+    except Exception as e:
+        logger.exception('Error in kbart_upload: %s', e)
+        messages.error(request, f"Error importing KBART: {e}")
+        return redirect('resources:kbart_upload')
 
 def csv_download(request):
     """Download resources as CSV"""

@@ -26,7 +26,15 @@ class OERSourceForm(forms.ModelForm):
         url_validator = URLValidator()
         self.fields['api_endpoint'].validators.append(url_validator)
         self.fields['oaipmh_url'].validators.append(url_validator)
-        self.fields['csv_url'].validators.append(url_validator)
+
+
+        # Optional KBART upload (admin-only non-model field)
+        from django.utils.translation import gettext_lazy as _
+        self.fields['kbart_file'] = forms.FileField(
+            required=False,
+            label=_('KBART file (TSV)'),
+            help_text=_('Upload a KBART .tsv file to import directly for CSV/KBART sources')
+        )
     
     def clean(self):
         cleaned_data = super().clean()
@@ -37,8 +45,18 @@ class OERSourceForm(forms.ModelForm):
             self.add_error('api_endpoint', 'API endpoint is required for API sources')
         elif source_type == 'OAIPMH' and not cleaned_data.get('oaipmh_url'):
             self.add_error('oaipmh_url', 'OAI-PMH URL is required for OAI-PMH sources')
-        elif source_type == 'CSV' and not cleaned_data.get('csv_url'):
-            self.add_error('csv_url', 'CSV URL is required for CSV sources')
+        elif source_type == 'CSV':
+            # For CSV sources allow either a URL or a KBART file upload (kbart_file)
+            csv_url = cleaned_data.get('csv_url')
+            kbart_file = cleaned_data.get('kbart_file')
+            if not csv_url and not kbart_file:
+                self.add_error('csv_url', 'CSV URL or KBART file is required for CSV/KBART sources')
+            # If a CSV URL is provided, validate it's a URL here (field-level validators were disabled)
+            if csv_url:
+                try:
+                    url_validator(csv_url)
+                except Exception:
+                    self.add_error('csv_url', 'Enter a valid URL.')
         
         return cleaned_data
 
@@ -144,6 +162,39 @@ class CSVUploadForm(forms.Form):
         if not csv_file.name.lower().endswith(('.csv', '.tsv')):
             raise forms.ValidationError(_("Please upload a CSV or TSV file."))
         return csv_file
+
+
+class KBARTUploadForm(forms.Form):
+    """Form for uploading KBART TSV files or providing a KBART URL."""
+    kbart_file = forms.FileField(
+        label=_("Upload KBART (TSV) file"),
+        required=False,
+        help_text=_("Upload a KBART .tsv file")
+    )
+    kbart_url = forms.URLField(
+        label=_("KBART file URL"),
+        required=False,
+        help_text=_("Or paste a URL to a KBART .tsv file")
+    )
+    source = forms.ModelChoiceField(
+        queryset=OERSource.objects.all(),
+        label=_("Attach to source"),
+        required=False,
+        help_text=_("Choose an existing OER source (or leave blank to create new)")
+    )
+    create_source_name = forms.CharField(
+        label=_("Create source with name"),
+        required=False,
+        help_text=_("If provided and 'source' is empty, a new OERSource will be created with this name")
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        file = cleaned.get('kbart_file')
+        url = cleaned.get('kbart_url')
+        if not file and not url:
+            raise forms.ValidationError(_('Please provide a KBART file or URL.'))
+        return cleaned
 
 class ExportForm(forms.Form):
     """Form for selecting export format"""

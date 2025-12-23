@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'CSV': {
                 'oer_commons': { name: 'OER Commons CSV', description: 'OER Commons resource catalog via CSV', url: 'https://www.oercommons.org/export/csv' },
                 'skills_commons': { name: 'Skills Commons OER', description: 'Skills Commons OER materials catalog', url: 'https://www.skillscommons.org/export/oer.csv' }
+                , 'kbart': { name: 'KBART (TSV)', description: 'KBART-compliant TSV (upload or URL)', url: '' }
             },
             'MARCXML': {
                 'oapen': { name: 'OAPEN MARCXML dump', description: 'OAPEN MARCXML dump (books)', marcxml_url: 'https://memo.oapen.org/file/oapen/OAPENLibrary_MARCXML_books.xml' },
@@ -111,6 +112,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="preset-grid">
             <button type="button" class="preset-button specific" data-type="CSV" onclick="applyPreset('CSV', 'oer_commons')">OER Commons</button>
             <button type="button" class="preset-button specific" data-type="CSV" onclick="applyPreset('CSV', 'skills_commons')">Skills Commons</button>
+                <button type="button" class="preset-button specific" data-type="CSV" onclick="applyPreset('CSV', 'kbart')">KBART (TSV)</button>
         </div>
     </div>
 

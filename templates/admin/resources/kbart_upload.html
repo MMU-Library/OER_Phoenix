@@ -1,0 +1,49 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<div id="content-main">
+    <h1>Upload KBART File</h1>
+    <div class="module">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <fieldset class="aligned wide">
+                <div class="form-row">
+                    {{ form.kbart_file.label_tag }}
+                    {{ form.kbart_file }}
+                    {% if form.kbart_file.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.kbart_file.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                <div class="form-row">
+                    {{ form.kbart_url.label_tag }}
+                    {{ form.kbart_url }}
+                    {% if form.kbart_url.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.kbart_url.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                <div class="form-row">
+                    {{ form.source.label_tag }}
+                    {{ form.source }}
+                </div>
+                <div class="form-row">
+                    {{ form.create_source_name.label_tag }}
+                    {{ form.create_source_name }}
+                </div>
+            </fieldset>
+            <div class="submit-row">
+                <input type="submit" value="Import KBART" class="default" name="_save">
+                <a href="{% url 'admin:resources_oersource_changelist' %}" class="button">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
